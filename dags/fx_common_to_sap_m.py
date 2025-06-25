@@ -5,7 +5,7 @@ from datetime import datetime
 from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
-from src.fx_to_sap.crawler import crawl_cpt_fx
+from src.fx_to_sap.extractor import crawl_cpt_fx
 
 # 設定時區為 Asia/Taipei
 local_tz = timezone("Asia/Taipei")
