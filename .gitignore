@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+*.env
+
+# Virtual Env
+.venv/
+env/
+venv/
+
+# Logs
+logs/
+*.log
+
+# Airflow
+airflow.db
+unittests.cfg
+.airflow/
+airflow.cfg
+dags/__pycache__/
+
+# VSCode
+.vscode/
+
+# Docker
+*.pid
+*.pid.lock
+*.sock
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
