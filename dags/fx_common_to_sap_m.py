@@ -6,6 +6,7 @@ from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.fx_to_sap.extractor import crawl_cpt_fx
+from src.fx_to_sap.transformer import clean_data_for_sap
 
 # 設定時區為 Asia/Taipei
 local_tz = timezone("Asia/Taipei")
@@ -42,5 +43,13 @@ with DAG(
         python_callable=crawl_cpt_fx
     )
 
-    start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> crawl_cpt_fx_task >> end
+    clean_data_for_sap_task = PythonOperator(
+        task_id="clean_data_for_sap",
+        python_callable=clean_data_for_sap,
+        provide_context=True  # v2 airflow 可省略，但寫上更明確
+    )
+
+    start >> [check_selenium_task, check_mssql_task, check_rfc_task] \
+      >> crawl_cpt_fx_task >> clean_data_for_sap_task >> end
+
 

@@ -96,9 +96,16 @@ def crawl_cpt_fx():
     df["start"] = data["start"]
     df["end"] = data["end"]
 
+    # ReFormat df 
+    df["fx_rate"] = (df["buyValue"] + df["sellValue"]) / 2
+    df["to_curr"] = "TWD"
+    df = df.rename(columns={
+        "code": "from_curr",
+    })
+
     print("✅ JSON to DataFrame 完成，共有筆數:", len(df))
     print(df.head())
 
     driver.quit()
 
-    return df.to_dict()  # ❗XCom 不支援直接傳 df，要先轉成 dict
+    return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
