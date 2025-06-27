@@ -94,7 +94,7 @@ def clean_data_for_sap(rate_type=None, **context):
     format_df["rate_type"] = rate_type
     format_df["VALID_FROM"] = format_df["VALID_FROM"].apply(lambda x: datetime.strptime(x, "%Y%m%d").date())
     print("✅ Data ReFormat：")
-    print(format_df.head())
+    print(format_df)
 
     return format_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
 
@@ -111,5 +111,27 @@ def gen_fx_to_USD(**context):
         raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
     print("✅ 成功取得xcom，前幾筆資料如下：")
     print(crawl_df.head())
+
+    # 取得 USD ➝ TWD 的匯率（只會有一筆）-------------------------------------------------------------------------
+    usd_to_twd_row = crawl_df[crawl_df["from_curr"] == "USD"]
+    if usd_to_twd_row.empty:
+        raise ValueError("❌ 找不到 USD ➝ TWD 匯率")
+
+    usd_to_twd_buy = usd_to_twd_row["buyValue"].values[0]
+    usd_to_twd_sell = usd_to_twd_row["sellValue"].values[0]
+
+    fx_to_USD_df = crawl_df.copy()
+
+    # 計算 from_curr ➝ USD 的匯率
+    fx_to_USD_df["buyValue"] = fx_to_USD_df["buyValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd_buy)))
+    fx_to_USD_df["sellValue"] = fx_to_USD_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd_sell)))
+    fx_to_USD_df["fx_rate"] = (fx_to_USD_df["buyValue"] + fx_to_USD_df["sellValue"]) / 2
+    fx_to_USD_df["to_curr"] = "USD"
+
+    # 回傳合併的新 df（保留原始 + 新增 USD）
+    concat_df = pd.concat([crawl_df, fx_to_USD_df], ignore_index=True)
+
+    print("✅ Convert to USD, concat with origin data：")
+    print(concat_df)
     
-    return crawl_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
+    return concat_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict

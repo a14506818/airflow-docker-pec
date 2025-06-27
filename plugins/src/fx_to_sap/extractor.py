@@ -105,7 +105,7 @@ def crawl_cpt_fx(): # 海關常見幣別
     })
 
     print("✅ JSON to DataFrame 完成，共有筆數:", len(df))
-    print(df.head())
+    print(df)
 
     driver.quit()
 
