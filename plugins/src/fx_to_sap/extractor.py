@@ -9,9 +9,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-def crawl_cpt_fx():
+def crawl_cpt_fx(): # 海關常見幣別
     # 設定下載路徑
-    download_dir = "/opt/airflow/downloads"  # 你可以換成其他資料夾
+    download_dir = "/opt/airflow/downloads"
     os.makedirs(download_dir, exist_ok=True)
 
     service = Service(executable_path=ChromeDriverManager().install())
@@ -70,6 +70,7 @@ def crawl_cpt_fx():
         EC.element_to_be_clickable((By.ID, "current_json"))
     )
     # click
+    print(os.getuid())  # 印出當前 UID
     button = driver.find_element(By.ID, "current_json")
     driver.execute_script("arguments[0].click();", button)
     print("✅ JSON Download Triggered")

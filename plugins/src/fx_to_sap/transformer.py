@@ -2,7 +2,8 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from pyrfc import Connection
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 
 def get_sap_fx(PI_DATE, PI_FROM_CURR, PI_TO_CURR):
     load_dotenv()  # 載入 .env 檔
@@ -39,7 +40,10 @@ def get_sap_fx(PI_DATE, PI_FROM_CURR, PI_TO_CURR):
 
     return df
 
-def clean_data_for_sap(**context):
+def clean_data_for_sap(rate_type=None, **context):
+    if rate_type not in ['M','V']:
+        raise ValueError("❌ Please define rate type ! M or V")
+
     ti = context["ti"] # 取得 Task Instance
     fx_dict = ti.xcom_pull(task_ids="crawl_cpt_fx")
     crawl_df = pd.DataFrame(fx_dict)
@@ -63,21 +67,35 @@ def clean_data_for_sap(**context):
     crawl_df.reset_index(drop=True, inplace=True)
 
     # fx rate * ratio
+    # 確保欄位轉成 Decimal
+    crawl_df["fx_rate"] = crawl_df["fx_rate"].apply(lambda x: Decimal(str(x)))
+    crawl_df["from_ratio"] = crawl_df["from_ratio"].apply(lambda x: Decimal(str(x)))
     crawl_df["fx_rate_with_ratio"] = crawl_df["fx_rate"] * crawl_df["from_ratio"]
 
     print("✅ Data Cleaned：")
     print(crawl_df.head())
 
     # ReFormat ------------------------------------------------------------------------------------------------
-    format_df = crawl_df[["from_curr", "to_curr", "fx_rate_with_ratio"]]
+    # set date col for different rate type
+    valid_from = ""
+    if rate_type == "M":
+        valid_from = "start"
+    elif rate_type == "V":
+        valid_from = "end"
+
+    format_df = crawl_df[["from_curr", "to_curr", "fx_rate_with_ratio", valid_from]]
     format_df = format_df.rename(columns={
-        "from_curr": "new_col1",
-        "to_curr": "new_col1",
-        "fx_rate_with_ratio": "new_col1",
+        "from_curr": "FROM_CURR",
+        "to_curr": "TO_CURRNCY",
+        "fx_rate_with_ratio": "EXCH_RATE",
+        valid_from: "VALID_FROM",
     })
-    format_df["rate_type"] = "M"
+    format_df["rate_type"] = rate_type
+    format_df["VALID_FROM"] = format_df["VALID_FROM"].apply(lambda x: datetime.strptime(x, "%Y%m%d").date())
     print("✅ Data ReFormat：")
     print(format_df.head())
+
+    return format_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
 
 def clean_data_for_bpm():
     pass
