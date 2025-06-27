@@ -44,8 +44,9 @@ def clean_data_for_sap(rate_type=None, **context):
     if rate_type not in ['M','V']:
         raise ValueError("❌ Please define rate type ! M or V")
 
+    # get XCOM -----------------------------------------------------------------------------------------------
     ti = context["ti"] # 取得 Task Instance
-    fx_dict = ti.xcom_pull(task_ids="crawl_cpt_fx")
+    fx_dict = ti.xcom_pull(task_ids="gen_fx_to_USD")
     crawl_df = pd.DataFrame(fx_dict)
     if crawl_df.empty:
         raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
@@ -56,7 +57,7 @@ def clean_data_for_sap(rate_type=None, **context):
     drop_indices = []
     for idx, row in crawl_df.iterrows():
         # get SAP fx data
-        sap_fx_df = get_sap_fx(date.today(),row["from_curr"],"TWD")
+        sap_fx_df = get_sap_fx(date.today(),row["from_curr"],row["to_curr"])
         from_ratio = sap_fx_df["from_ratio"].iloc[0]
         if sap_fx_df["fx_rate"].iloc[0] == 0:
             drop_indices.append(idx)
@@ -97,6 +98,18 @@ def clean_data_for_sap(rate_type=None, **context):
 
     return format_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
 
-def clean_data_for_bpm():
+def clean_data_for_bpm(**context):
     pass
 
+
+def gen_fx_to_USD(**context):
+    # get XCOM -----------------------------------------------------------------------------------------------
+    ti = context["ti"] # 取得 Task Instance
+    fx_dict = ti.xcom_pull(task_ids="crawl_cpt_fx")
+    crawl_df = pd.DataFrame(fx_dict)
+    if crawl_df.empty:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+    print("✅ 成功取得xcom，前幾筆資料如下：")
+    print(crawl_df.head())
+    
+    return crawl_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
