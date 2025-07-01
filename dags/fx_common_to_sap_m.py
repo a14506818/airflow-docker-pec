@@ -51,14 +51,14 @@ with DAG(
 
     gen_fx_to_USD_task = PythonOperator(
         task_id="gen_fx_to_USD",
-        python_callable=gen_fx_to_USD
+        python_callable=gen_fx_to_USD,
+        op_kwargs={"skipped": False}, # True or False
     )
 
     clean_data_for_sap_task = PythonOperator(
         task_id="clean_data_for_sap",
         python_callable=clean_data_for_sap,
         op_kwargs={"rate_type": "M"}, # M or V
-        provide_context=True  # v2 airflow 可省略，但寫上更明確
     )
 
     start >> [check_selenium_task, check_mssql_task, check_rfc_task] \
