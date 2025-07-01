@@ -7,6 +7,7 @@ from pendulum import timezone
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.fx_to_sap.extractor import crawl_cpt_fx
 from src.fx_to_sap.transformer import gen_fx_to_USD, clean_data_for_sap
+from src.fx_to_sap.loader import write_data_to_sap
 
 
 # 設定時區為 Asia/Taipei
@@ -19,11 +20,11 @@ with DAG(
     catchup=False,
     tags=["fx", "SAP", "common", "typeM"],
     description="常見幣別匯率寫入 SAP typeM，每月 7, 17, 27 執行",
-    default_args={
-        "retries": 2,
-        "retry_delay": timedelta(minutes=1),
-        "execution_timeout": timedelta(minutes=10),
-    }
+    # default_args={
+    #     "retries": 2,
+    #     "retry_delay": timedelta(minutes=1),
+    #     "execution_timeout": timedelta(minutes=10),
+    # }
 ) as dag:
     
     start = EmptyOperator(task_id="start")
@@ -61,7 +62,13 @@ with DAG(
         op_kwargs={"rate_type": "M"}, # M or V
     )
 
+    write_data_to_sap_task = PythonOperator(
+        task_id="write_data_to_sap",
+        python_callable=write_data_to_sap
+    )
+
     start >> [check_selenium_task, check_mssql_task, check_rfc_task] \
-      >> crawl_cpt_fx_task >> gen_fx_to_USD_task >> clean_data_for_sap_task >> end
+    >> crawl_cpt_fx_task >> gen_fx_to_USD_task \
+    >> clean_data_for_sap_task >> write_data_to_sap_task >> end
 
 

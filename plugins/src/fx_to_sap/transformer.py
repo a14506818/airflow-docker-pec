@@ -92,7 +92,7 @@ def clean_data_for_sap(rate_type=None, **context):
         "fx_rate_with_ratio": "EXCH_RATE",
         valid_from: "VALID_FROM",
     })
-    format_df["rate_type"] = rate_type
+    format_df["RATE_TYPE"] = rate_type
     format_df["VALID_FROM"] = format_df["VALID_FROM"].apply(lambda x: datetime.strptime(x, "%Y%m%d").date())
     print("✅ Data ReFormat：")
     print(format_df)
@@ -122,15 +122,11 @@ def gen_fx_to_USD(skipped=False, **context):
     if usd_to_twd_row.empty:
         raise ValueError("❌ 找不到 USD ➝ TWD 匯率")
 
-    # usd_to_twd_buy = usd_to_twd_row["buyValue"].values[0]
-    # usd_to_twd_sell = usd_to_twd_row["sellValue"].values[0]
     usd_to_twd = usd_to_twd_row["fx_rate"].values[0]
 
     fx_to_USD_df = crawl_df.copy()
 
     # 計算 from_curr ➝ USD 的匯率
-    # fx_to_USD_df["buyValue"] = fx_to_USD_df["buyValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd_buy)))
-    # fx_to_USD_df["sellValue"] = fx_to_USD_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd_sell)))
     fx_to_USD_df["fx_rate"] = fx_to_USD_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd)))
     fx_to_USD_df["to_curr"] = "USD"
 
