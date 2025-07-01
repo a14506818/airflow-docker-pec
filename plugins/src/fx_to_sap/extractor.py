@@ -9,6 +9,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from datetime import date
+
 def crawl_cpt_fx(): # 海關常見幣別
     # 設定下載路徑
     download_dir = "/opt/airflow/downloads"
@@ -107,6 +109,68 @@ def crawl_cpt_fx(): # 海關常見幣別
     print("✅ JSON to DataFrame 完成，共有筆數:", len(df))
     print(df)
 
+    driver.quit()
+
+    return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
+
+
+def crawl_oanda_fx(): # 特殊幣別
+    service = Service(executable_path=ChromeDriverManager().install())
+
+    # 這些建議都加上，不開頁面、禁用GPU加速等等
+    # 需要模擬真人，不然會被CPT網頁阻擋
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/113.0.0.0 Safari/537.36')
+    options.add_argument("accept-language=zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+
+
+    driver = webdriver.Chrome(service=service, options=options)
+
+    print("Chrome version:", driver.capabilities['browserVersion'])
+    print("ChromeDriver version:", driver.capabilities['chrome']['chromedriverVersion'])
+
+    # 特殊幣別清單 -----------------------------------------------------------------------------------------------
+    from_currencies = ["HUF", "RUB", "TRY", "VND", "MOP"]
+    print("from_currencies:", from_currencies)
+    to_currencies = ["TWD", "USD"]
+    print("to_currencies:", to_currencies)
+
+    # start looping through currencies ---------------------------------------------------
+    results = []
+    for from_curr in from_currencies:
+        for to_curr in to_currencies:
+            # 開啟 OANDA 網站 -------------------------------------------------------------------------------------------
+            driver.get(f"https://www.oanda.com/currency-converter/en/?from={from_curr}&to={to_curr}&amount=1")
+
+            # get fx rate ---------------------------------------------------------------------------------
+            wait = WebDriverWait(driver, 30)
+            input_element = wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, 'input[name="numberformat"][tabindex="4"]')
+            ))
+
+            # 抓取 value
+            value = input_element.get_attribute("value")
+            print(f"{from_curr} to {to_curr} fx rate: ", value)
+
+            # 檢查是否為空值
+            if not value:
+                print(f"❌ {from_curr} to {to_curr} fx rate is empty, skipping...")
+                continue
+
+            # insert to results
+            results.append({
+                "from_curr": from_curr,
+                "to_curr": to_curr,
+                "fx_rate": value,
+                "start": date.today().strftime("%Y%m%d"),  # 日期設為今天
+                "end": date.today().strftime("%Y%m%d"),  # 日期設為今天
+            })
+
+    print("✅ All fx rates fetched successfully:", results)
     driver.quit()
 
     return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict

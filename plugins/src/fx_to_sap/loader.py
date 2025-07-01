@@ -2,7 +2,10 @@ import os
 from dotenv import load_dotenv
 from pyrfc import Connection
 import pandas as pd
+from datetime import datetime, date
+from decimal import Decimal, InvalidOperation
 from pprint import pprint
+
 
 def write_data_to_sap(**context):
     # get XCOM -----------------------------------------------------------------------------------------------
@@ -38,9 +41,16 @@ def write_data_to_sap(**context):
         rows.append({
             "FROM_CURR": str(row["FROM_CURR"]),
             "TO_CURRNCY": str(row["TO_CURRNCY"]),
-            "EXCH_RATE": float(row["EXCH_RATE"]),
+            "EXCH_RATE": f"{float(row['EXCH_RATE']):.5f}",  # 強制轉字串後轉 Decimal
             "VALID_FROM": row["VALID_FROM"].strftime("%Y%m%d"),
             "RATE_TYPE": str(row["RATE_TYPE"]), 
+            # 強迫填寫欄位 ------------------------------
+            "FROM_FACTOR": "1",             
+            "TO_FACTOR": "1",
+            "EXCH_RATE_V": "1.00000",
+            "FROM_FACTOR_V": "1",
+            "TO_FACTOR_V": "1",
+            # ------------------------------------------
         })
 
     if not rows:
@@ -50,17 +60,13 @@ def write_data_to_sap(**context):
     for row in rows:
         print(row)
 
-    # # test data
-    # rows = []
-    # rows.append({
-    #     "FROM_CURR": "USD",
-    #     "TO_CURRNCY": "TWD",
-    #     "EXCH_RATE": 30.5,
-    #     "VALID_FROM": "20231001",
-    #     "RATE_TYPE": "M", 
-    # })
-    # pprint(rows)
-
     # 寫入 RFC
-    result = conn.call("Z_FI_EXCHANGE_RATE_CREATE", LT_RATE=rows)
-    print("✅ 寫入 SAP 成功:", result)
+    try:
+        result = conn.call("Z_FI_EXCHANGE_RATE_CREATE", LT_RATE=rows)
+        print("✅ 寫入 SAP 成功:", result)
+    except Exception as e:
+        import traceback
+        print("❌ 詳細錯誤回傳如下：")
+        traceback.print_exc()
+        raise RuntimeError(f"❌ 寫入 SAP 發生錯誤: {str(e)}")
+

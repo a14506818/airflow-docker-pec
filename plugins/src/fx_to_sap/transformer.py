@@ -106,7 +106,7 @@ def clean_data_for_bpm(**context):
 def gen_fx_to_USD(skipped=False, **context):
     # get XCOM -----------------------------------------------------------------------------------------------
     ti = context["ti"] # 取得 Task Instance
-    fx_dict = ti.xcom_pull(task_ids="crawl_cpt_fx")
+    fx_dict = ti.xcom_pull(task_ids="crawl_fx_data")
     crawl_df = pd.DataFrame(fx_dict)
     if crawl_df.empty:
         raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
-from src.fx_to_sap.extractor import crawl_cpt_fx
+from src.fx_to_sap.extractor import crawl_oanda_fx
 from src.fx_to_sap.transformer import gen_fx_to_USD, clean_data_for_sap
 from src.fx_to_sap.loader import write_data_to_sap
 
@@ -14,12 +14,12 @@ from src.fx_to_sap.loader import write_data_to_sap
 local_tz = timezone("Asia/Taipei")
 
 with DAG(
-    dag_id="fx_common_to_sap_m",
-    schedule="0 3 7,17,27 * *",  # 每月 7, 17, 27 號的 03:00
+    dag_id="fx_rare_to_sap_m",
+    schedule="0 3 1,11,21 * *",  # 每月 1, 11, 21 號的 03:00
     start_date=datetime(2024, 1, 1, tzinfo=local_tz),
     catchup=False,
-    tags=["fx", "SAP", "common", "typeM"],
-    description="常見幣別匯率寫入 SAP typeM，每月 7, 17, 27 執行",
+    tags=["fx", "SAP", "rare", "typeM"],
+    description="特殊幣別匯率寫入 SAP typeM，每月 1, 11, 21 執行",
     # default_args={
     #     "retries": 2,
     #     "retry_delay": timedelta(minutes=1),
@@ -45,30 +45,28 @@ with DAG(
         python_callable=check_rfc
     )
 
-    crawl_cpt_fx_task = PythonOperator(
+    crawl_oanda_fx_task = PythonOperator(
         task_id="crawl_fx_data",
-        python_callable=crawl_cpt_fx
+        python_callable=crawl_oanda_fx
     )
 
-    gen_fx_to_USD_task = PythonOperator(
-        task_id="gen_fx_to_USD",
-        python_callable=gen_fx_to_USD,
-        op_kwargs={"skipped": False}, # True or False
-    )
+    # gen_fx_to_USD_task = PythonOperator(
+    #     task_id="gen_fx_to_USD",
+    #     python_callable=gen_fx_to_USD,
+    #     op_kwargs={"skipped": True}, # True or False
+    # )
 
-    clean_data_for_sap_task = PythonOperator(
-        task_id="clean_data_for_sap",
-        python_callable=clean_data_for_sap,
-        op_kwargs={"rate_type": "M"}, # M or V
-    )
+    # clean_data_for_sap_task = PythonOperator(
+    #     task_id="clean_data_for_sap",
+    #     python_callable=clean_data_for_sap,
+    #     op_kwargs={"rate_type": "M"}, # M or V
+    # )
 
-    write_data_to_sap_task = PythonOperator(
-        task_id="write_data_to_sap",
-        python_callable=write_data_to_sap
-    )
+    # write_data_to_sap_task = PythonOperator(
+    #     task_id="write_data_to_sap",
+    #     python_callable=write_data_to_sap
+    # )
 
-    start >> [check_selenium_task, check_mssql_task, check_rfc_task] \
-    >> crawl_cpt_fx_task >> gen_fx_to_USD_task \
-    >> clean_data_for_sap_task >> write_data_to_sap_task >> end
+    start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> crawl_oanda_fx_task >> end
 
 
