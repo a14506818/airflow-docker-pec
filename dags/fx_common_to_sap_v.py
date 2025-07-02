@@ -8,7 +8,7 @@ from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.fx_to_sap.extractor import crawl_cpt_fx
 from src.fx_to_sap.transformer import gen_fx_to_USD, clean_data_for_sap, clean_data_for_bpm
 from src.fx_to_sap.loader import write_data_to_sap, write_data_to_bpm
-
+from src.common.email import on_success, on_failure  
 
 # 設定時區為 Asia/Taipei
 local_tz = timezone("Asia/Taipei")
@@ -20,15 +20,19 @@ with DAG(
     catchup=False,
     tags=["fx", "SAP", "common", "typeV"],
     description="常見幣別匯率寫入 SAP typeV，每月 17 執行",
-    # default_args={
-    #     "retries": 2,
-    #     "retry_delay": timedelta(minutes=1),
-    #     "execution_timeout": timedelta(minutes=15),
-    # }
+    default_args={
+        "retries": 2,
+        "retry_delay": timedelta(minutes=1),
+        "execution_timeout": timedelta(minutes=15),
+        "on_failure_callback": on_failure,
+    }
 ) as dag:
     
     start = EmptyOperator(task_id="start")
-    end = EmptyOperator(task_id="end")
+    end = EmptyOperator(
+        task_id="end",
+        on_success_callback=on_success
+    )
 
     check_selenium_task = PythonOperator(
         task_id="check_selenium_connection",

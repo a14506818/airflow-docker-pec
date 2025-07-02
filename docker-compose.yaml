@@ -68,6 +68,8 @@ x-airflow-common:
     - ./plugins/nwrfcsdk:/opt/nwrfcsdk
     - ./downloads:/opt/airflow/downloads
   user: "${AIRFLOW_UID:-50000}:0"
+  env_file:
+  - .env
   depends_on:
     &airflow-common-depends-on
     redis:
