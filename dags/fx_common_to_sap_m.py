@@ -8,7 +8,7 @@ from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.fx_to_sap.extractor import crawl_cpt_fx
 from src.fx_to_sap.transformer import gen_fx_to_USD, clean_data_for_sap, clean_data_for_bpm
 from src.fx_to_sap.loader import write_data_to_sap, write_data_to_bpm
-from src.common.email import on_success, on_failure  
+from src.common.email_utils import on_success, on_failure  
 
 # 設定時區為 Asia/Taipei
 local_tz = timezone("Asia/Taipei")
