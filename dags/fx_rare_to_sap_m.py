@@ -16,14 +16,14 @@ local_tz = timezone("Asia/Taipei")
 with DAG(
     dag_id="fx_rare_to_sap_m",
     schedule="0 3 1,11,21 * *",  # 每月 1, 11, 21 號的 03:00
-    start_date=datetime(2024, 1, 1, tzinfo=local_tz),
+    start_date=datetime(2025, 7, 1, tzinfo=local_tz),
     catchup=False,
     tags=["fx", "SAP", "rare", "typeM"],
     description="特殊幣別匯率寫入 SAP typeM，每月 1, 11, 21 執行",
     # default_args={
     #     "retries": 2,
     #     "retry_delay": timedelta(minutes=1),
-    #     "execution_timeout": timedelta(minutes=10),
+    #     "execution_timeout": timedelta(minutes=15),
     # }
 ) as dag:
     
