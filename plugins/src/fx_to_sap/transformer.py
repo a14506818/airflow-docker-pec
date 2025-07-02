@@ -5,19 +5,47 @@ from pyrfc import Connection
 from datetime import date, datetime
 from decimal import Decimal
 
-def get_sap_fx(PI_DATE, PI_FROM_CURR, PI_TO_CURR):
-    load_dotenv()  # 載入 .env 檔
-    # 連線資訊可放在 .env 或 config 中 
-    conn_params = {
-        "user": os.getenv("SAP_USER"),
-        "passwd": os.getenv("SAP_PASS"),
-        "ashost": os.getenv("SAP_ASHOST"),
-        "sysnr": os.getenv("SAP_SYSNR"),
-        "client": os.getenv("SAP_CLIENT"),
-        "lang": os.getenv("SAP_LANG", "EN"),
-    }
-    conn = Connection(**conn_params)
+from src.common.common import get_mssql_conn_str, get_sap_conn_params
 
+def gen_fx_to_USD(skipped=False, **context): # ---------------------------------------------------------------------------------------------------------------------
+    # get XCOM -----------------------------------------------------------------------------------------------
+    ti = context["ti"] # 取得 Task Instance
+    fx_dict = ti.xcom_pull(task_ids="crawl_fx_data")
+    crawl_df = pd.DataFrame(fx_dict)
+    if crawl_df.empty:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+    print("✅ 成功取得xcom，前幾筆資料如下：")
+    print(crawl_df.head())
+
+    # skipped, pass xcom to next task
+    if skipped:
+        print("⚠️ Skipped gen_fx_to_USD, pass xcom to next task")
+        return crawl_df.to_dict("records") 
+
+    # 取得 USD ➝ TWD 的匯率（只會有一筆）-------------------------------------------------------------------------
+    usd_to_twd_row = crawl_df[crawl_df["from_curr"] == "USD"]
+    if usd_to_twd_row.empty:
+        raise ValueError("❌ 找不到 USD ➝ TWD 匯率")
+
+    usd_to_twd = usd_to_twd_row["fx_rate"].values[0]
+
+    fx_to_USD_df = crawl_df.copy()
+
+    # 計算 from_curr ➝ USD 的匯率
+    fx_to_USD_df["fx_rate"] = fx_to_USD_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd)))
+    fx_to_USD_df["to_curr"] = "USD"
+
+    # 回傳合併的新 df（保留原始 + 新增 USD）
+    concat_df = pd.concat([crawl_df, fx_to_USD_df], ignore_index=True)
+
+    print("✅ Convert to USD, concat with origin data：")
+    print(concat_df)
+    
+    return concat_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
+
+def get_sap_fx(PI_DATE, PI_FROM_CURR, PI_TO_CURR): # ---------------------------------------------------------------------------------------------------------------------
+    conn_params = get_sap_conn_params()
+    conn = Connection(**conn_params)
     try:
         # 呼叫 RFC
         rfc_result = conn.call('Z_FI_BPM_005', PI_DATE=PI_DATE, PI_FROM_CURR=PI_FROM_CURR, PI_TO_CURR=PI_TO_CURR)
@@ -40,7 +68,7 @@ def get_sap_fx(PI_DATE, PI_FROM_CURR, PI_TO_CURR):
 
     return df
 
-def clean_data_for_sap(rate_type=None, **context):
+def clean_data_for_sap(rate_type=None, **context): # ---------------------------------------------------------------------------------------------------------------------
     if rate_type not in ['M','V']:
         raise ValueError("❌ Please define rate type ! M or V")
 
@@ -101,7 +129,7 @@ def clean_data_for_sap(rate_type=None, **context):
     format_df["TO_CURRNCY"] = format_df["TO_CURRNCY"].astype(str)
     format_df["EXCH_RATE"] = format_df["EXCH_RATE"].apply(lambda x: f"{float(x):.5f}")  # 強制轉字串
     format_df["VALID_FROM"] = format_df["VALID_FROM"].apply(lambda x: x.strftime("%Y%m%d"))  # 轉成 YYYYMMDD 字串
-    # 強迫填寫欄位 ---------------------------------------------------------
+    # 強迫填寫欄位 (sap table 的所有欄位都需要出現 且小數點精度必須正確) ---------------------------------------------------------
     format_df["FROM_FACTOR"] = "1"  
     format_df["TO_FACTOR"] = "1"
     format_df["EXCH_RATE_V"] = "1.00000"
@@ -113,11 +141,7 @@ def clean_data_for_sap(rate_type=None, **context):
 
     return format_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
 
-def clean_data_for_bpm(**context):
-    pass
-
-
-def gen_fx_to_USD(skipped=False, **context):
+def clean_data_for_bpm(**context): # ---------------------------------------------------------------------------------------------------------------------
     # get XCOM -----------------------------------------------------------------------------------------------
     ti = context["ti"] # 取得 Task Instance
     fx_dict = ti.xcom_pull(task_ids="crawl_fx_data")
@@ -127,27 +151,27 @@ def gen_fx_to_USD(skipped=False, **context):
     print("✅ 成功取得xcom，前幾筆資料如下：")
     print(crawl_df.head())
 
-    # skipped, pass xcom to next task
-    if skipped:
-        return crawl_df.to_dict("records") 
+    # remove USD, only keep TWD --------------------------------------------------------------------------------
+    crawl_df = crawl_df[crawl_df["to_curr"] == "TWD"]
+    if crawl_df.empty:
+        raise ValueError("❌ 沒有 TWD 的匯率資料，請檢查上游任務")
 
-    # 取得 USD ➝ TWD 的匯率（只會有一筆）-------------------------------------------------------------------------
-    usd_to_twd_row = crawl_df[crawl_df["from_curr"] == "USD"]
-    if usd_to_twd_row.empty:
-        raise ValueError("❌ 找不到 USD ➝ TWD 匯率")
+    # ReFormat ------------------------------------------------------------------------------------------------
+    format_df = crawl_df[["from_curr", "to_curr", "fx_rate", "start"]]
+    format_df = format_df.rename(columns={
+        "from_curr": "Currency",
+        "to_curr": "Currency2",
+        "fx_rate": "Rate",
+        "start": "RateDate",
+    })
+    # final data type conversion --------------------------------------------------------------------------------------
+    format_df["Currency"] = format_df["Currency"].astype(str)
+    format_df["Currency2"] = format_df["Currency2"].astype(str)
+    format_df["Rate"] = format_df["Rate"].apply(lambda x: f"{float(x):.5f}")  # 強制轉字串
+    format_df["RateDate"] = format_df["RateDate"].apply(lambda x: datetime.strptime(x, "%Y%m%d").date().strftime("%Y-%m-%d"))
 
-    usd_to_twd = usd_to_twd_row["fx_rate"].values[0]
+    print("✅ Data ReFormat：")
+    print(format_df)
 
-    fx_to_USD_df = crawl_df.copy()
+    return format_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
 
-    # 計算 from_curr ➝ USD 的匯率
-    fx_to_USD_df["fx_rate"] = fx_to_USD_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd)))
-    fx_to_USD_df["to_curr"] = "USD"
-
-    # 回傳合併的新 df（保留原始 + 新增 USD）
-    concat_df = pd.concat([crawl_df, fx_to_USD_df], ignore_index=True)
-
-    print("✅ Convert to USD, concat with origin data：")
-    print(concat_df)
-    
-    return concat_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict

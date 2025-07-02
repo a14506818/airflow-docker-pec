@@ -173,4 +173,4 @@ def crawl_oanda_fx(): # 特殊幣別
     print("✅ All fx rates fetched successfully:", results)
     driver.quit()
 
-    return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
+    return results

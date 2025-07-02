@@ -1,4 +1,5 @@
 from pyrfc import Connection
+import pyodbc
 import pandas as pd
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
@@ -20,7 +21,6 @@ def write_data_to_sap(**context):
 
     # 載入環境變數 -------------------------------------------------------------------------------------------
     conn_params = get_sap_conn_params()
-    print("SAP Connection Parameters:", conn_params)
     conn = Connection(**conn_params)
 
     # 寫入 RFC
@@ -33,3 +33,43 @@ def write_data_to_sap(**context):
         traceback.print_exc()
         raise RuntimeError(f"❌ 寫入 SAP 發生錯誤: {str(e)}")
 
+def write_data_to_bpm(**context):
+    # get XCOM -----------------------------------------------------------------------------------------------
+    ti = context["ti"] # 取得 Task Instance
+    final_data = ti.xcom_pull(task_ids="clean_data_for_bpm")
+    
+    if not final_data:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+
+    pprint("✅ 成功取得xcom，資料如下：")
+    pprint(final_data)
+
+    # 載入環境變數 -------------------------------------------------------------------------------------------
+    conn_str = get_mssql_conn_str()
+    conn = pyodbc.connect(conn_str, timeout=5)
+    print("✅ MSSQL 連線成功")
+
+    # 寫入資料庫
+    cursor = conn.cursor()
+    for row in final_data:
+        # 檢查數值是否為有效的 Decimal
+        try:
+            row['Rate'] = Decimal(str(row['Rate']))
+        except InvalidOperation:
+            raise ValueError(f"❌ 無效的匯率數值: {row['Rate']}")
+
+        cursor.execute("""
+            MERGE INTO ExchangeRate AS target
+            USING (SELECT ? AS Currency, ? AS Currency2, ? AS Rate, ? AS RateDate) AS source
+            ON target.Currency = source.Currency AND target.Currency2 = source.Currency2 AND target.RateDate = source.RateDate
+            WHEN MATCHED THEN
+                UPDATE SET Rate = source.Rate
+            WHEN NOT MATCHED THEN
+                INSERT (Currency, Currency2, Rate, RateDate)
+                VALUES (source.Currency, source.Currency2, source.Rate, source.RateDate);
+        """, row['Currency'], row['Currency2'], row['Rate'], row['RateDate'])
+
+    conn.commit()
+    print("✅ 寫入 BPM 成功")
+
+    conn.close()
