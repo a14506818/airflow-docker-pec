@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 from pyrfc import Connection
 from pyrfc._exception import ABAPApplicationError, ABAPRuntimeError, LogonError, CommunicationError
 
+from src.common.common import get_mssql_conn_str, get_sap_conn_params
+
 load_dotenv(dotenv_path="/opt/airflow/dags/.env") # 載入 .env 變數
 
 def check_selenium():
@@ -36,19 +38,7 @@ def check_selenium():
     driver.quit()
 
 def check_mssql():
-    driver = os.getenv("DB_DRIVER")
-    server = os.getenv("DB_SERVER")
-    database = os.getenv("DB_DATABASE")
-    username = os.getenv("DB_USERNAME")
-    password = os.getenv("DB_PASSWORD")
-
-    conn_str = (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={server};"
-        f"DATABASE={database};"
-        f"UID={username};"
-        f"PWD={password};"
-    )
+    conn_str = get_mssql_conn_str()
     print('conn_str => ',conn_str)
     conn = pyodbc.connect(conn_str, timeout=5)
     conn.close()
@@ -56,23 +46,8 @@ def check_mssql():
     return True
 
 def check_rfc():
-    try:
-        conn_params = {
-            "user": os.getenv("SAP_USER"),
-            "passwd": os.getenv("SAP_PASS"),
-            "ashost": os.getenv("SAP_ASHOST"),
-            "sysnr": os.getenv("SAP_SYSNR"),
-            "client": os.getenv("SAP_CLIENT"),
-            "lang": os.getenv("SAP_LANG", "EN"),
-        }
-
-        print("Connecting to SAP via RFC...")
-        conn = Connection(**conn_params)
-
-        # 呼叫測試函式
-        result = conn.call("STFC_CONNECTION")
-        print("RFC OK:", result)
-
-    except (ABAPApplicationError, ABAPRuntimeError, LogonError, CommunicationError) as e:
-        print("RFC ERROR:", e)
-        raise e
+    conn_params = get_sap_conn_params()
+    print("SAP Connection Parameters:", conn_params)
+    conn = Connection(**conn_params)
+    result = conn.call("STFC_CONNECTION")
+    print("✅ SAP RFC 連線成功: ", result)

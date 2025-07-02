@@ -94,6 +94,20 @@ def clean_data_for_sap(rate_type=None, **context):
     })
     format_df["RATE_TYPE"] = rate_type
     format_df["VALID_FROM"] = format_df["VALID_FROM"].apply(lambda x: datetime.strptime(x, "%Y%m%d").date())
+
+    # final data type conversion --------------------------------------------------------------------------------------
+    format_df["RATE_TYPE"] = format_df["RATE_TYPE"].astype(str)
+    format_df["FROM_CURR"] = format_df["FROM_CURR"].astype(str)
+    format_df["TO_CURRNCY"] = format_df["TO_CURRNCY"].astype(str)
+    format_df["EXCH_RATE"] = format_df["EXCH_RATE"].apply(lambda x: f"{float(x):.5f}")  # 強制轉字串
+    format_df["VALID_FROM"] = format_df["VALID_FROM"].apply(lambda x: x.strftime("%Y%m%d"))  # 轉成 YYYYMMDD 字串
+    # 強迫填寫欄位 ---------------------------------------------------------
+    format_df["FROM_FACTOR"] = "1"  
+    format_df["TO_FACTOR"] = "1"
+    format_df["EXCH_RATE_V"] = "1.00000"
+    format_df["FROM_FACTOR_V"] = "1"
+    format_df["TO_FACTOR_V"] = "1"
+
     print("✅ Data ReFormat：")
     print(format_df)
 
