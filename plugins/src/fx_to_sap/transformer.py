@@ -95,6 +95,9 @@ def clean_data_for_sap(rate_type=None, **context): # ---------------------------
     crawl_df.drop(index=drop_indices, inplace=True)
     crawl_df.reset_index(drop=True, inplace=True)
 
+    # set 'end' always to the end of month
+    crawl_df["end"] = crawl_df["end"].apply(lambda x: datetime.strptime(x, "%Y%m%d").replace(day=1) + pd.offsets.MonthEnd(0)).dt.strftime("%Y%m%d")
+
     # fx rate * ratio; round to 5 nums
     # 確保欄位轉成 Decimal
     crawl_df["fx_rate"] = crawl_df["fx_rate"].apply(lambda x: Decimal(str(x)))
