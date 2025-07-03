@@ -73,3 +73,21 @@ def write_data_to_bpm(**context):
     print("✅ 寫入 BPM 成功")
 
     conn.close()
+
+def write_data_to_excel(**context):
+    # get XCOM -----------------------------------------------------------------------------------------------
+    ti = context["ti"] # 取得 Task Instance
+    final_data = ti.xcom_pull(task_ids="clean_data_for_sap")
+    
+    if not final_data:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+
+    pprint("✅ 成功取得xcom，資料如下：")
+    pprint(final_data)
+
+    # 寫入 Excel 檔案 ----------------------------------------------------------------------------------------
+    df = pd.DataFrame(final_data)
+    file_name = f"fx_rates_{context['dag'].dag_id}_{date.today().strftime('%Y%m%d')}.xlsx"
+    file_path = f"/opt/airflow/export/{file_name}"
+    df.to_excel(file_path, index=False)
+    print(f"✅ 成功寫入 Excel 檔案: {file_path}")
