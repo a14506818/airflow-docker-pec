@@ -1,6 +1,7 @@
 from pyrfc import Connection
 import pyodbc
 import pandas as pd
+import pendulum
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from pprint import pprint
@@ -74,7 +75,7 @@ def write_data_to_bpm(**context):
 
     conn.close()
 
-def write_data_to_excel(**context):
+def gen_attchments(**context):
     # get XCOM -----------------------------------------------------------------------------------------------
     ti = context["ti"] # 取得 Task Instance
     final_data = ti.xcom_pull(task_ids="clean_data_for_sap")
@@ -85,9 +86,15 @@ def write_data_to_excel(**context):
     pprint("✅ 成功取得xcom，資料如下：")
     pprint(final_data)
 
+    tz = pendulum.timezone("Asia/Taipei")
+    local_time = context["execution_date"].in_timezone(tz)
+
     # 寫入 Excel 檔案 ----------------------------------------------------------------------------------------
     df = pd.DataFrame(final_data)
-    file_name = f"fx_rates_{context['dag'].dag_id}_{date.today().strftime('%Y%m%d')}.xlsx"
+    file_name = f"FinalData__{context['dag'].dag_id}__{local_time.strftime('%Y%m%d_%H%M')}.xlsx"
     file_path = f"/opt/airflow/export/{file_name}"
     df.to_excel(file_path, index=False)
     print(f"✅ 成功寫入 Excel 檔案: {file_path}")
+
+    file_path_list = [file_path]  # 將檔案路徑放入列表中
+    return file_path_list
