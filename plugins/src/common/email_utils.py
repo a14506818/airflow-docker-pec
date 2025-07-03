@@ -3,6 +3,8 @@ import pendulum
 import logging
 import os
 
+email_receiver_list = ["justin_yang@pharmaessentia.com"]
+
 def send_success_email(dag_id: str, description: str, execution_date, to: list, attachments: list = None):
     logging.info("📤 Preparing to send success notification email...")
     tz = pendulum.timezone("Asia/Taipei")
@@ -44,7 +46,7 @@ def on_success(context): # 前一個task 必須是 gen_attchments，才會寄附
         dag_id=context['dag'].dag_id,
         description=context['dag'].description,
         execution_date=context['execution_date'],
-        to=["justin_yang@pharmaessentia.com"],
+        to=email_receiver_list,
         attachments=xcom_value  # 可加參數傳路徑
     )
 
@@ -70,5 +72,5 @@ def on_failure(context):
         dag_id=context['dag'].dag_id,
         description=context['dag'].description,
         execution_date=context['execution_date'],
-        to=["justin_yang@pharmaessentia.com"]
+        to=email_receiver_list
     )
