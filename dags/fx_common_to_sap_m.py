@@ -16,7 +16,7 @@ local_tz = timezone("Asia/Taipei")
 with DAG(
     dag_id="fx_common_to_sap_m",
     schedule="0 3 7,17,27 * *",  # 每月 7, 17, 27 號的 03:00
-    start_date=datetime(2025, 7, 1, tzinfo=local_tz),
+    start_date = local_tz.datetime(2025, 1, 1, 0, 0, 0),
     catchup=False,
     tags=["fx", "SAP", "common", "typeM"],
     description="常見幣別匯率寫入 SAP typeM，每月 7, 17, 27 執行",
@@ -92,5 +92,4 @@ with DAG(
     crawl_cpt_fx_task >> clean_data_for_bpm_task >> write_data_to_bpm_task
 
     [gen_attchments_task, write_data_to_bpm_task] >> end
-
 

@@ -16,7 +16,7 @@ local_tz = timezone("Asia/Taipei")
 with DAG(
     dag_id="fx_rare_to_sap_m",
     schedule="0 3 1,11,21 * *",  # 每月 1, 11, 21 號的 03:00
-    start_date=datetime(2025, 7, 1, tzinfo=local_tz),
+    start_date = local_tz.datetime(2025, 1, 1, 0, 0, 0),
     catchup=False,
     tags=["fx", "SAP", "rare", "typeM"],
     description="特殊幣別匯率寫入 SAP typeM，每月 1, 11, 21 執行",

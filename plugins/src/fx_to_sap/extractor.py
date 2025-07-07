@@ -152,7 +152,7 @@ def crawl_oanda_fx(): # 特殊幣別
                 (By.CSS_SELECTOR, 'input[name="numberformat"][tabindex="4"]')
             ))
             # 等到 value 不是 "-"
-            wait.until(lambda d: input_element.get_attribute("value") != "-")
+            wait.until(lambda d: input_element.get_attribute("value") != "-") 
 
             # 抓取 value
             value = input_element.get_attribute("value")
