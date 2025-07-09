@@ -6,7 +6,7 @@ from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.fx_to_sap.extractor import crawl_oanda_fx
-from src.fx_to_sap.transformer import gen_fx_to_USD, clean_data_for_sap, clean_data_for_bpm
+from src.fx_to_sap.transformer import gen_fx_to_other_currencies, clean_data_for_sap, clean_data_for_bpm
 from src.fx_to_sap.loader import write_data_to_sap, write_data_to_bpm, gen_attchments
 from src.common.email_utils import on_success, on_failure  
 
@@ -54,9 +54,9 @@ with DAG(
         python_callable=crawl_oanda_fx
     )
 
-    gen_fx_to_USD_task = PythonOperator(
-        task_id="gen_fx_to_USD",
-        python_callable=gen_fx_to_USD,
+    gen_fx_to_other_currencies_task = PythonOperator(
+        task_id="gen_fx_to_other_currencies",
+        python_callable=gen_fx_to_other_currencies,
         op_kwargs={"skipped": True}, # True or False
     )
 
@@ -78,7 +78,7 @@ with DAG(
 
     start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> crawl_oanda_fx_task
 
-    crawl_oanda_fx_task >> gen_fx_to_USD_task >> clean_data_for_sap_task >> write_data_to_sap_task >> gen_attchments_task >> end
+    crawl_oanda_fx_task >> gen_fx_to_other_currencies_task >> clean_data_for_sap_task >> write_data_to_sap_task >> gen_attchments_task >> end
 
 
 

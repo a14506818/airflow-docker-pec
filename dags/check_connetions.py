@@ -9,7 +9,7 @@ local_tz = timezone("Asia/Taipei")
 
 with DAG(
     dag_id="check_connetions",
-    schedule="32 9 7 * *",  # 每月 7, 17, 27 號的 03:00
+    schedule="0 8 * * *", 
     start_date = local_tz.datetime(2025, 1, 1, 0, 0, 0),
     catchup=False,
     tags=["demo", "selenium"],

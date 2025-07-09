@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from airflow.models import Variable
 from dotenv import load_dotenv
 from pyrfc import Connection
 from datetime import date, datetime
@@ -7,7 +8,7 @@ from decimal import Decimal
 
 from src.common.common import get_mssql_conn_str, get_sap_conn_params
 
-def gen_fx_to_USD(skipped=False, **context): # ---------------------------------------------------------------------------------------------------------------------
+def gen_fx_to_other_currencies(skipped=False, **context): # ---------------------------------------------------------------------------------------------------------------------
     # get XCOM -----------------------------------------------------------------------------------------------
     ti = context["ti"] # 取得 Task Instance
     fx_dict = ti.xcom_pull(task_ids="crawl_fx_data")
@@ -19,26 +20,37 @@ def gen_fx_to_USD(skipped=False, **context): # ---------------------------------
 
     # skipped, pass xcom to next task
     if skipped:
-        print("⚠️ Skipped gen_fx_to_USD, pass xcom to next task")
+        print("⚠️ Skipped gen_fx_to_other_currencies, pass xcom to next task")
         return crawl_df.to_dict("records") 
 
-    # 取得 USD ➝ TWD 的匯率（只會有一筆）-------------------------------------------------------------------------
-    usd_to_twd_row = crawl_df[crawl_df["from_curr"] == "USD"]
-    if usd_to_twd_row.empty:
-        raise ValueError("❌ 找不到 USD ➝ TWD 匯率")
 
-    usd_to_twd = usd_to_twd_row["fx_rate"].values[0]
+    to_currencies = Variable.get("fx_target_currency_list", deserialize_json=True) # 從 Airflow 變數中取得目標幣別清單
+    # remove TWD, 因為 TWD 是基準幣別
+    to_currencies = [curr for curr in to_currencies if curr != "TWD"]
+    print("to_currencies:", to_currencies)
 
-    fx_to_USD_df = crawl_df.copy()
+    fx_to_other_currency_df = pd.DataFrame()  # 初始化空的 DataFrame 用於存放轉換後的資料
+    for other_currency in to_currencies:
+        other_currency_to_twd_row = crawl_df[crawl_df["from_curr"] == other_currency]
+        if other_currency_to_twd_row.empty:
+            raise ValueError(f"❌ 找不到 {other_currency} ➝ TWD 匯率")
 
-    # 計算 from_curr ➝ USD 的匯率
-    fx_to_USD_df["fx_rate"] = fx_to_USD_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(usd_to_twd)))
-    fx_to_USD_df["to_curr"] = "USD"
+        other_currency_to_twd = other_currency_to_twd_row["fx_rate"].values[0]
 
-    # 回傳合併的新 df（保留原始 + 新增 USD）
-    concat_df = pd.concat([crawl_df, fx_to_USD_df], ignore_index=True)
+        temp_df = crawl_df.copy()
+        # 計算 from_curr ➝ USD 的匯率
+        temp_df["fx_rate"] = temp_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(other_currency_to_twd)))
+        temp_df["to_curr"] = other_currency
+        print("❗ 轉換成其他幣別的匯率：")
+        print(temp_df[["from_curr", "to_curr", "fx_rate"]].head())
 
-    print("✅ Convert to USD, concat with origin data：")
+        # 
+        fx_to_other_currency_df = pd.concat([fx_to_other_currency_df, temp_df], ignore_index=True)
+
+    concat_df = pd.concat([crawl_df, fx_to_other_currency_df], ignore_index=True)
+    # 排除自己轉自己
+    concat_df = concat_df[concat_df["from_curr"] != concat_df["to_curr"]]
+    print(f"✅ Convert to other currencies, concat with origin data：")
     print(concat_df)
     
     return concat_df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
@@ -51,7 +63,7 @@ def get_sap_fx(PI_DATE, PI_FROM_CURR, PI_TO_CURR): # ---------------------------
         rfc_result = conn.call('Z_FI_BPM_005', PI_DATE=PI_DATE, PI_FROM_CURR=PI_FROM_CURR, PI_TO_CURR=PI_TO_CURR)
         print("rfc_result: ", rfc_result)
         df = pd.DataFrame([rfc_result])
-        print("✅ SAP 匯率資料如下：")
+        print(f"✅ SAP 匯率資料如下：")
         print(df.head())
         # clean data
         df = df.rename(columns={
@@ -61,6 +73,7 @@ def get_sap_fx(PI_DATE, PI_FROM_CURR, PI_TO_CURR): # ---------------------------
         })
     except Exception as e:
         print("❌ 呼叫 SAP RFC 發生錯誤(no data)：", str(e))
+        print(f"{PI_FROM_CURR} ➝ {PI_TO_CURR} 的 SAP 匯率資料不存在，使用預設值")
         df = pd.DataFrame([{"from_ratio": 1, "fx_rate": 0, "to_ratio": 1}])
     finally:    
         df["from_curr"] = PI_FROM_CURR
@@ -74,7 +87,7 @@ def clean_data_for_sap(rate_type=None, **context): # ---------------------------
 
     # get XCOM -----------------------------------------------------------------------------------------------
     ti = context["ti"] # 取得 Task Instance
-    fx_dict = ti.xcom_pull(task_ids="gen_fx_to_USD")
+    fx_dict = ti.xcom_pull(task_ids="gen_fx_to_other_currencies")
     crawl_df = pd.DataFrame(fx_dict)
     if crawl_df.empty:
         raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
@@ -87,11 +100,14 @@ def clean_data_for_sap(rate_type=None, **context): # ---------------------------
         # get SAP fx data
         sap_fx_df = get_sap_fx(date.today(),row["from_curr"],row["to_curr"])
         from_ratio = sap_fx_df["from_ratio"].iloc[0]
+        to_ratio = sap_fx_df["to_ratio"].iloc[0]
         if sap_fx_df["fx_rate"].iloc[0] == 0:
             drop_indices.append(idx)
-        else:
-            crawl_df.at[idx, "from_ratio"] = from_ratio # join SAP ratio
-    # remove curr if not in SAP
+        
+        crawl_df.at[idx, "from_ratio"] = from_ratio # join SAP ratio
+        crawl_df.at[idx, "to_ratio"] = to_ratio
+
+    # remove curr if not in SAP 
     crawl_df.drop(index=drop_indices, inplace=True)
     crawl_df.reset_index(drop=True, inplace=True)
 

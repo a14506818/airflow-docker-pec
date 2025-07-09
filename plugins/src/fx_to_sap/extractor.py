@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+from airflow.models import Variable
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
@@ -134,9 +135,9 @@ def crawl_oanda_fx(): # 特殊幣別
     print("ChromeDriver version:", driver.capabilities['chrome']['chromedriverVersion'])
 
     # 特殊幣別清單 -----------------------------------------------------------------------------------------------
-    from_currencies = ["HUF", "RUB", "TRY", "VND", "MOP"]
+    from_currencies = ["HUF", "RUB", "TRY", "MOP"]
     print("from_currencies:", from_currencies)
-    to_currencies = ["TWD", "USD"]
+    to_currencies = Variable.get("fx_target_currency_list", deserialize_json=True) # 從 Airflow 變數中取得目標幣別清單
     print("to_currencies:", to_currencies)
 
     # start looping through currencies ---------------------------------------------------
