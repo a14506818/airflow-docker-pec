@@ -1,13 +1,16 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime
+from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 
+local_tz = timezone("Asia/Taipei")
+
 with DAG(
     dag_id="check_connetions",
-    start_date=datetime(2025, 6, 24),
-    schedule_interval=None,
+    schedule="0 8 * * *", 
+    start_date = local_tz.datetime(2025, 1, 1, 0, 0, 0),
     catchup=False,
     tags=["demo", "selenium"],
 ) as dag:

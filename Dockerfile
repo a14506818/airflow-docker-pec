@@ -50,5 +50,7 @@ RUN pip install --no-cache-dir pyodbc
 RUN pip install --no-cache-dir python-dotenv
 
 RUN pip install --no-cache-dir pyrfc==3.3.1
+RUN pip install --no-cache-dir pandas
+RUN pip install --no-cache-dir openpyxl
 
 

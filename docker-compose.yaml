@@ -64,9 +64,13 @@ x-airflow-common:
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
+    - ./export:/opt/airflow/export
     - ./plugins:/opt/airflow/plugins 
     - ./plugins/nwrfcsdk:/opt/nwrfcsdk
+    - ./downloads:/opt/airflow/downloads
   user: "${AIRFLOW_UID:-50000}:0"
+  env_file:
+  - .env
   depends_on:
     &airflow-common-depends-on
     redis:
@@ -228,8 +232,8 @@ services:
           echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
           echo
         fi
-        mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        mkdir -p /sources/logs /sources/dags /sources/plugins /sources/downloads /sources/export
+        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins,downloads,export}
         exec /entrypoint airflow version
     # yamllint enable rule:line-length
     environment:
