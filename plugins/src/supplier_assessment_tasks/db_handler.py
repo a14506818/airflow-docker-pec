@@ -25,11 +25,11 @@ class DBHandler:
         """
         刪除暫存資料表
         """
-        query = "DELETE FROM TMP_MOL_compliance_result;"
+        query = "TRUNCATE TABLE TMP_MOL_compliance_result;"
         print("SQL:", query)
         self.cursor.execute(query)
         
-        query = "DELETE FROM TMP_ENV_compliance_result;"
+        query = "TRUNCATE TABLE TMP_ENV_compliance_result;"
         print("SQL:", query)
         self.cursor.execute(query)
 
@@ -146,3 +146,44 @@ class DBHandler:
             
         self.conn.commit()
         print(f"✅ 寫入 {len(df)} 筆至 {table_name}")
+
+    def copy_tmp_to_his_and_prd(self, source: str):
+        tmp_table = f"TMP_{source}_compliance_result"
+        his_table = f"HIS_{source}_compliance_result"
+        prd_table = f"PRD_{source}_compliance_result"
+
+        exclude_cols = {"id", "inserted_at"}
+
+        # 取欄位名稱
+        cols = [row.column_name for row in self.cursor.columns(tmp_table)]
+        filtered_cols = [col for col in cols if col not in exclude_cols]
+        col_str = ', '.join(filtered_cols)
+
+        # Append TMP → HIS
+        query = f"""
+            INSERT INTO {his_table} ({col_str})
+            SELECT {col_str}
+            FROM {tmp_table}
+        """
+        print("SQL:", query)
+        self.cursor.execute(query)
+        print(f"✅ 複製 TMP 資料至 {his_table} 成功")
+
+        # Truncate PRD
+        query = f"TRUNCATE TABLE {prd_table}"
+        print("SQL:", query)
+        self.cursor.execute(query)
+        print(f"✅ 清空 {prd_table} 成功")
+
+        # Insert TMP → PRD
+        query = f"""
+            INSERT INTO {prd_table} ({col_str})
+            SELECT {col_str}
+            FROM {tmp_table}
+        """
+        print("SQL:", query)
+        self.cursor.execute(query)
+        print(f"✅ 複製 TMP 資料至 {prd_table} 成功")
+
+        self.conn.commit()
+        print("✅ 複製 TMP 資料至 HIS PRD 成功")

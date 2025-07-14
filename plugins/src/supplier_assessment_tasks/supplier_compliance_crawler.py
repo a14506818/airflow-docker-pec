@@ -112,3 +112,14 @@ def crawl_compliance_data(**context):
     
     db_handler.shotdown()
     print("✅ 所有爬蟲任務完成")
+
+def copy_tmp_to_his_and_prd():
+    """
+    將 TMP 資料表的資料複製到最終的資料表
+    """
+    db_handler = DBHandler()
+    db_handler.copy_tmp_to_his_and_prd('MOL')
+    db_handler.copy_tmp_to_his_and_prd('ENV')
+    db_handler.shotdown()
+    print("✅ TMP 資料表資料已成功複製到最終資料表")
+
