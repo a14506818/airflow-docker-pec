@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
-from src.supplier_assessment_tasks.supplier_compliance_crawler import del_tmp_table, get_partner_list, crawl_compliance_data, copy_tmp_to_his_and_prd
+from src.supplier_assessment_tasks.supplier_compliance_crawler import del_tmp_table, get_partner_list, crawl_compliance_data, copy_tmp_to_his_and_prd, gen_attchments
 
 
 # 設定時區為 Asia/Taipei
@@ -67,5 +67,11 @@ with DAG(
         python_callable=copy_tmp_to_his_and_prd
     )
 
+    gen_attchments_task = PythonOperator(
+        task_id="gen_attchments",
+        python_callable=gen_attchments
+    )
 
-    start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> del_tmp_table_task >> get_partner_list_task >> crawl_compliance_data_task >> copy_tmp_to_his_and_prd_task >> end
+
+    start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> del_tmp_table_task \
+        >> get_partner_list_task >> crawl_compliance_data_task >> copy_tmp_to_his_and_prd_task >> gen_attchments_task >> end

@@ -1,6 +1,7 @@
 import pandas as pd
 import pyodbc
 import time
+import pendulum
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import uuid
@@ -14,12 +15,12 @@ from src.common.common import get_mssql_conn_str
 def del_tmp_table():
     db_handler = DBHandler()
     db_handler.del_tmp_table()
-    db_handler.shotdown()
+    db_handler.shutdown()
     
 def get_partner_list():
     db_handler = DBHandler()
     company_names = db_handler.get_partner_list()
-    db_handler.shotdown()
+    db_handler.shutdown()
     return company_names
     
 def crawl_compliance_data(**context):
@@ -110,7 +111,7 @@ def crawl_compliance_data(**context):
                 error_logs.append(err + '\n' + traceback.format_exc())
                 update_job_status(job_id, status="fail", error_msg=str(e))
     
-    db_handler.shotdown()
+    db_handler.shutdown()
     print("✅ 所有爬蟲任務完成")
 
 def copy_tmp_to_his_and_prd():
@@ -120,6 +121,47 @@ def copy_tmp_to_his_and_prd():
     db_handler = DBHandler()
     db_handler.copy_tmp_to_his_and_prd('MOL')
     db_handler.copy_tmp_to_his_and_prd('ENV')
-    db_handler.shotdown()
+    db_handler.shutdown()
     print("✅ TMP 資料表資料已成功複製到最終資料表")
+
+def gen_attchments(**context):
+    """
+    生成附件
+    """
+    db_handler = DBHandler()
+    mol_df = db_handler.get_specific_table('PRD_MOL_compliance_result')
+    env_df = db_handler.get_specific_table('PRD_ENV_compliance_result')
+
+    print(mol_df)
+    print(env_df)
+
+    # 檔名與路徑
+    tz = pendulum.timezone("Asia/Taipei")
+    local_time = context["execution_date"].in_timezone(tz)
+    file_name = f"FinalData__{context['dag'].dag_id}__{local_time.strftime('%Y%m%d_%H%M')}.xlsx"
+    file_path = f"/opt/airflow/export/{file_name}"
+
+    print("爬蟲結束，開始匯出結果至Excel...")
+
+    with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+        sheet_written = False
+
+        if not mol_df.empty:
+            mol_df.to_excel(writer, sheet_name="MOL", index=False)
+            sheet_written = True
+
+        if not env_df.empty:
+            env_df.to_excel(writer, sheet_name="ENV", index=False)
+            sheet_written = True
+
+        # 如果都沒資料，至少寫入一個空 sheet
+        if not sheet_written:
+            pd.DataFrame({"empty": []}).to_excel(writer, sheet_name="EMPTY", index=False)
+            print("❌ 查無任何結果，已生成空白 sheet。")
+        else:
+            print(f"✅ 成功寫入 Excel 檔案: {file_path}")
+
+    db_handler.shutdown()  
+    print("✅ 附件生成完成")
+    return [file_path]  # 將檔案路徑放入列表中
 

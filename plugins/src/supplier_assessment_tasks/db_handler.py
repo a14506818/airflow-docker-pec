@@ -13,7 +13,7 @@ class DBHandler:
         self.cursor = self.conn.cursor()
         print("✅ MSSQL 連線成功")
 
-    def shotdown(self):
+    def shutdown(self):
         """
         關閉資料庫連線
         """
@@ -187,3 +187,19 @@ class DBHandler:
 
         self.conn.commit()
         print("✅ 複製 TMP 資料至 HIS PRD 成功")
+
+    def get_specific_table(self, table_name: str):
+        """
+        取得特定資料表的所有資料
+        """
+        query = f"SELECT * FROM {table_name}"
+        print("SQL:", query)
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+        if not rows:
+            raise ValueError(f"❌ {table_name} 資料表為空，請檢查資料庫")
+        
+        # 將結果轉為 DataFrame
+        df = pd.DataFrame.from_records(rows, columns=[column[0] for column in self.cursor.description])
+        print(f"✅ 取得 {table_name} 資料成功")
+        return df
