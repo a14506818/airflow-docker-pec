@@ -7,6 +7,8 @@ from pendulum import timezone
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.supplier_assessment_tasks.supplier_compliance_crawler import del_tmp_table, get_partner_list, crawl_compliance_data, copy_tmp_to_his_and_prd, gen_attchments
 
+from src.common.email_utils import on_success, on_failure  
+
 
 # 設定時區為 Asia/Taipei
 local_tz = timezone("Asia/Taipei")
@@ -21,15 +23,15 @@ with DAG(
     default_args={
         # "retries": 2,
         # "retry_delay": timedelta(minutes=1),
-        "execution_timeout": timedelta(minutes=15),
-        # "on_failure_callback": on_failure,
+        "execution_timeout": timedelta(minutes=300),
+        "on_failure_callback": on_failure,
     }
 ) as dag:
     
     start = EmptyOperator(task_id="start")
     end = EmptyOperator(
         task_id="end",
-        # on_success_callback=on_success
+        on_success_callback=on_success
     )
 
     check_selenium_task = PythonOperator(

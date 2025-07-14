@@ -69,7 +69,7 @@ def crawl_compliance_data(**context):
     run_key = "RK_" + time.strftime("%Y%m%d%H%M%S")
 
     # 並行查詢 MOL 與 ENV -------------------------------------------------------------------------------------
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=8) as executor:
         future_to_info = {}
         job_ids = {} # 紀錄 JOB ID 對應的公司名稱與來源
         for name in company_names:
