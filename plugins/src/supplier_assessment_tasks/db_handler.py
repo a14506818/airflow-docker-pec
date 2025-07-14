@@ -40,7 +40,7 @@ class DBHandler:
         """
         取得 REF 供應商評估任務的爬蟲清單
         """
-        query = "SELECT partner_name FROM REF_partner_crawler_list_test"  # REF_partner_crawler_list
+        query = "SELECT partner_name FROM REF_partner_crawler_list"  # REF_partner_crawler_list or  REF_partner_crawler_list_test
         print("SQL:", query)
         self.cursor.execute(query)
         rows = self.cursor.fetchall()
@@ -74,7 +74,7 @@ class DBHandler:
         """
         self.cursor.execute("""
             UPDATE JOB_compliance_crawler
-            SET status = ?, error_msg = ?
+            SET status = ?, error_msg = ?, ended_at = GETDATE()
             WHERE id = ?
         """, status, error_msg, job_id)
 
