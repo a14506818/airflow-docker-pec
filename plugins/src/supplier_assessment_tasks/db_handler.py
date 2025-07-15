@@ -21,18 +21,14 @@ class DBHandler:
         self.conn.close()
         print("✅ MSSQL 連線已關閉")
 
-    def del_tmp_table(self):
+    def del_table(self, table_name: str):
         """
         刪除暫存資料表
         """
-        query = "TRUNCATE TABLE TMP_MOL_compliance_result;"
+        query = f"TRUNCATE TABLE {table_name};"
         print("SQL:", query)
         self.cursor.execute(query)
         
-        query = "TRUNCATE TABLE TMP_ENV_compliance_result;"
-        print("SQL:", query)
-        self.cursor.execute(query)
-
         self.conn.commit()
         print("✅ 刪除暫存資料表成功")
 
@@ -82,7 +78,9 @@ class DBHandler:
         print(f"✅ 更新 JOB {job_id} 狀態為 {status} 成功")
 
     def insert_tmp_result(self, df: pd.DataFrame, source: str):
-        """將查詢結果寫入 TMP__compliance_result"""
+        """
+        將查詢結果寫入 TMP__compliance_result
+        """
         table_name = f"TMP_{source}_compliance_result"
         if df.empty:
             print("⚠️ 傳入空的 DataFrame，未執行寫入。")
@@ -148,6 +146,9 @@ class DBHandler:
         print(f"✅ 寫入 {len(df)} 筆至 {table_name}")
 
     def copy_tmp_to_his_and_prd(self, source: str):
+        """
+        將 TMP 資料表的資料複製到最終的資料表
+        """
         tmp_table = f"TMP_{source}_compliance_result"
         his_table = f"HIS_{source}_compliance_result"
         prd_table = f"PRD_{source}_compliance_result"
@@ -202,4 +203,52 @@ class DBHandler:
         # 將結果轉為 DataFrame
         df = pd.DataFrame.from_records(rows, columns=[column[0] for column in self.cursor.description])
         print(f"✅ 取得 {table_name} 資料成功")
+        return df
+
+    def get_BPM_fx_rate(self) -> pd.DataFrame:
+        """
+        取得 BPM 的匯率資料
+        """
+        query = """
+            WITH RankedRates AS (
+                SELECT Currency, Currency2, Rate,
+                    ROW_NUMBER() OVER (PARTITION BY Currency, Currency2 ORDER BY RateDate DESC) AS rn
+                FROM ExchangeRate
+            )
+            SELECT Currency, Currency2, Rate 
+            FROM RankedRates WHERE rn = 1;
+        """
+        print("SQL:", query)
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+        if not rows:
+            raise ValueError("❌ ExchangeRate 資料表為空，請檢查資料庫")
+        
+        # 將結果轉為 DataFrame
+        df = pd.DataFrame.from_records(rows, columns=[column[0] for column in self.cursor.description])
+        print("✅ 取得 BPM 匯率資料成功")
+        return df
+
+    def get_BPM_assessment_result(self, year: int) -> pd.DataFrame:
+        """
+        取得 BPM 考核結果資料
+        """
+        query = f"""
+            SELECT
+                T.State,
+                M.Plant_Code AS WERKS,
+                M.Partner AS PARTNER,
+                M.Comment
+            FROM Supplier_Assessment_M M
+            LEFT JOIN BPMDB.dbo.BPMInstTasks T
+                ON M.TaskID = T.TaskID
+            WHERE M.Year = {year} AND T.State = 'Approved'
+        """
+        print("SQL:", query)
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+        
+        # 將結果轉為 DataFrame
+        df = pd.DataFrame.from_records(rows, columns=[column[0] for column in self.cursor.description])
+        print(f"✅ 取得 {year} 年 BPM 考核結果資料成功")
         return df

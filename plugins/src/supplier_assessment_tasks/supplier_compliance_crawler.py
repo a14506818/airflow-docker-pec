@@ -14,7 +14,8 @@ from src.common.common import get_mssql_conn_str
 
 def del_tmp_table():
     db_handler = DBHandler()
-    db_handler.del_tmp_table()
+    db_handler.del_table('TMP_MOL_compliance_result')
+    db_handler.del_table('TMP_ENV_compliance_result')
     db_handler.shutdown()
     
 def get_partner_list():
