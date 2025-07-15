@@ -132,8 +132,8 @@ class DBHandler:
         # 只保留 COLUMNS_MAPPING 定義的欄位
         keep_cols = list(COLUMNS_MAPPING.values())  # 取 rename 後的新欄位名
         df = df[keep_cols]
-        # 將所有欄位的值轉為字串
-        df = df.astype(str)
+        # 將所有欄位的值轉為字串 （NaN -> ''）
+        df = df.fillna('').astype(str)
 
         # 寫入新資料
         for index, row in df.iterrows():
