@@ -36,10 +36,11 @@ def gen_fx_to_other_currencies(skipped=False, **context): # --------------------
             raise ValueError(f"❌ 找不到 {other_currency} ➝ TWD 匯率")
 
         other_currency_to_twd = other_currency_to_twd_row["fx_rate"].values[0]
+        print(f"✅ 找到 {other_currency} ➝ TWD 匯率: {other_currency_to_twd}")
 
         temp_df = crawl_df.copy()
         # 計算 from_curr ➝ USD 的匯率
-        temp_df["fx_rate"] = temp_df["sellValue"].apply(lambda x: Decimal(str(x)) / Decimal(str(other_currency_to_twd)))
+        temp_df["fx_rate"] = temp_df["fx_rate"].apply(lambda x: Decimal(str(x)) / Decimal(str(other_currency_to_twd)))
         temp_df["to_curr"] = other_currency
         print("❗ 轉換成其他幣別的匯率：")
         print(temp_df[["from_curr", "to_curr", "fx_rate"]].head())

@@ -68,6 +68,12 @@ def crawl_cpt_fx(): # 海關常見幣別
     driver.execute_script("tabClick('GC331')")
     print("✅ Clicked (GC331)每旬報關適用外幣匯率")
 
+    # 刪除可能存在的舊檔案 -----------------------------------------------------------------------------------------------
+    for f in os.listdir(download_dir):
+        if f.endswith(".json"):
+            os.remove(os.path.join(download_dir, f))
+            print(f"✅ 刪除舊檔案: {f}")
+
     # 等待下載按鈕出現 -----------------------------------------------------------------------------------------------------------
     WebDriverWait(driver, 30).until(
         EC.element_to_be_clickable((By.ID, "current_json"))
@@ -135,7 +141,7 @@ def crawl_oanda_fx(): # 特殊幣別
     print("ChromeDriver version:", driver.capabilities['chrome']['chromedriverVersion'])
 
     # 特殊幣別清單 -----------------------------------------------------------------------------------------------
-    from_currencies = ["HUF", "RUB", "TRY", "MOP"]
+    from_currencies = Variable.get("fx_rare_currency_list", deserialize_json=True) # 從 Airflow 變數中取得來源幣別清單
     print("from_currencies:", from_currencies)
     to_currencies = Variable.get("fx_target_currency_list", deserialize_json=True) # 從 Airflow 變數中取得目標幣別清單
     print("to_currencies:", to_currencies)
