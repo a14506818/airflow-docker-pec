@@ -1,9 +1,10 @@
 from airflow.utils.email import send_email
+from airflow.models import Variable
 import pendulum
 import logging
 import os
 
-email_receiver_list = ["justin_yang@pharmaessentia.com"]
+email_receiver_list = Variable.get("email_receiver_list", deserialize_json=True)
 
 def send_success_email(dag_id: str, description: str, execution_date, to: list, attachments: list = None):
     logging.info("📤 Preparing to send success notification email...")
