@@ -6,7 +6,7 @@ from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from pprint import pprint
 
-from src.common.common import get_mssql_conn_str, get_sap_conn_params
+from src.common.common import get_mssql_conn_str, get_sap_conn_params, check_rfc_return
 
 
 def write_data_to_sap(**context):
@@ -27,7 +27,9 @@ def write_data_to_sap(**context):
     # 寫入 RFC
     try:
         result = conn.call("Z_FI_EXCHANGE_RATE_CREATE", LT_RATE=final_data)
-        print("✅ 寫入 SAP 成功:", result)
+        lt_return = result.get('LT_RETURN', [])
+        check_rfc_return(lt_return)
+        print("✅ 寫入 SAP 成功：", lt_return)
     except Exception as e:
         import traceback
         print("❌ 詳細錯誤回傳如下：")

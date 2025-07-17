@@ -68,6 +68,12 @@ def crawl_cpt_fx(): # 海關常見幣別
     driver.execute_script("tabClick('GC331')")
     print("✅ Clicked (GC331)每旬報關適用外幣匯率")
 
+    # 刪除可能存在的舊檔案 -----------------------------------------------------------------------------------------------
+    for f in os.listdir(download_dir):
+        if f.endswith(".json"):
+            os.remove(os.path.join(download_dir, f))
+            print(f"✅ 刪除舊檔案: {f}")
+
     # 等待下載按鈕出現 -----------------------------------------------------------------------------------------------------------
     WebDriverWait(driver, 30).until(
         EC.element_to_be_clickable((By.ID, "current_json"))

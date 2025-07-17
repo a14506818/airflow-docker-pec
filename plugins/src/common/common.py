@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="/opt/airflow/dags/.env") # 載入 .env 變數
 
+# connection -------------------------------------------------------------------------------------
 def get_mssql_conn_str():
     driver = os.getenv("DB_DRIVER")
     server = os.getenv("DB_SERVER")
@@ -28,3 +29,17 @@ def get_sap_conn_params():
         "client": os.getenv("SAP_CLIENT"),
         "lang": os.getenv("SAP_LANG", "EN"),
     }
+
+# utils -------------------------------------------------------------------------------------
+def check_rfc_return(ret_list: list):
+    for ret in ret_list:
+        msg_type = ret.get("TYPE")
+        msg_text = ret.get("MESSAGE")
+        if msg_type == "E":
+            raise RuntimeError(f"❌ SAP RFC Error: {msg_text}")
+        elif msg_type == "A":
+            print(f"⚠️ SAP RFC Abort: {msg_text}")
+        elif msg_type == "W":
+            print(f"⚠️ SAP RFC Warning: {msg_text}")
+        else:
+            print(f"✅ SAP RFC Info: {msg_text}")
