@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pendulum import timezone
 
 from src.common.check_connection import check_mssql, check_rfc
-from src.supplier_assessment_tasks.supplier_assessment_pending_list_loader import get_GR_data, clean_data, group_data
+from src.supplier_assessment_tasks.supplier_assessment_pending_list_loader import get_GR_data, clean_data, group_data, insert_pending_list, insert_crawler_list, gen_attchments
 
 from src.common.email_utils import on_success, on_failure  
 
@@ -21,17 +21,17 @@ with DAG(
     tags=["supplier", "partner", "assessment", "pending list", "loader"],
     description="待考核供應商清單生成，7/1 執行",
     default_args={
-        # "retries": 2,
-        # "retry_delay": timedelta(minutes=1),
+        "retries": 2,
+        "retry_delay": timedelta(minutes=1),
         "execution_timeout": timedelta(minutes=15),
-        # "on_failure_callback": on_failure,
+        "on_failure_callback": on_failure,
     }
 ) as dag:
     
     start = EmptyOperator(task_id="start")
     end = EmptyOperator(
         task_id="end",
-        # on_success_callback=on_success
+        on_success_callback=on_success
     )
 
     check_mssql_task = PythonOperator(
@@ -59,8 +59,24 @@ with DAG(
         python_callable=group_data
     )
 
+    insert_pending_list_task = PythonOperator(
+        task_id="insert_pending_list",
+        python_callable=insert_pending_list
+    )
+
+    insert_crawler_list_task = PythonOperator(
+        task_id="insert_crawler_list",
+        python_callable=insert_crawler_list
+    )
+
+    gen_attchments_task = PythonOperator(
+        task_id="gen_attchments",
+        python_callable=gen_attchments
+    )
+
 
 
 
     start >> [check_mssql_task, check_rfc_task] \
-        >> get_GR_data_task >> clean_data_task >> group_data_task >> end
+        >> get_GR_data_task >> clean_data_task >> group_data_task \
+        >> [insert_pending_list_task, insert_crawler_list_task] >> gen_attchments_task >> end

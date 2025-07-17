@@ -252,3 +252,70 @@ class DBHandler:
         df = pd.DataFrame.from_records(rows, columns=[column[0] for column in self.cursor.description])
         print(f"✅ 取得 {year} 年 BPM 考核結果資料成功")
         return df
+    
+    def get_BPM_account(self) -> pd.DataFrame:
+        """
+        取得 BPM 帳號資料
+        """
+        query = """
+            select
+                HRID
+                , UserAccount as AssessorAccount
+                , DisplayName as AssessorName
+                , OUName as AssessorDeptShort
+                , replace(replace(replace(FullOUName, 'BPMOU://' ,''), 'PharmaEssentia Headquarter/', ''), 'PharmaEssentia Group/', '') as AssessorDept
+            from BPMDB.dbo.v_BPMSysOUMembers
+            where ID = DefaultPositionId
+                and HRID is not null
+            order by HRID
+        """
+        print("SQL:", query)
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+        
+        # 將結果轉為 DataFrame
+        df = pd.DataFrame.from_records(rows, columns=[column[0] for column in self.cursor.description])
+        print("✅ 取得 BPM 帳號資料成功")
+        return df
+
+    def insert_to_TMP_PendingSupplierAssessment(self, df: pd.DataFrame):
+        """
+        將 Pending Supplier Assessment 資料寫入 TMP_PendingSupplierAssessment
+        """
+        if df.empty:
+            print("⚠️ 傳入空的 DataFrame，未執行寫入。")
+            return
+        
+        # 將所有欄位的值轉為字串 （NaN -> ''）
+        df = df.fillna('').astype(str)
+
+        # 寫入新資料
+        for index, row in df.iterrows():
+            self.cursor.execute(f"""
+                INSERT INTO TMP_PendingSupplierAssessment ({', '.join(row.index)})
+                VALUES ({', '.join(['?' for _ in row])})
+            """, tuple(row))
+            
+        self.conn.commit()
+        print(f"✅ 寫入 {len(df)} 筆至 TMP_PendingSupplierAssessment")
+
+    def insert_to_REF_partner_crawler_list(self, df: pd.DataFrame):
+        """
+        將爬蟲清單寫入 REF_partner_crawler_list
+        """
+        if df.empty:
+            print("⚠️ 傳入空的 DataFrame，未執行寫入。")
+            return
+        
+        # 將所有欄位的值轉為字串 （NaN -> ''）
+        df = df.fillna('').astype(str)
+
+        # 寫入新資料
+        for index, row in df.iterrows():
+            self.cursor.execute(f"""
+                INSERT INTO REF_partner_crawler_list (partner_name)
+                VALUES (?)
+            """, row['partner_name'])
+            
+        self.conn.commit()
+        print(f"✅ 寫入 {len(df)} 筆至 REF_partner_crawler_list")

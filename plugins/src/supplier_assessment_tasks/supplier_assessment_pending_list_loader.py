@@ -1,5 +1,6 @@
 import pandas as pd
 from datetime import datetime
+import pendulum
 from pyrfc import Connection
 
 from src.supplier_assessment_tasks.db_handler import DBHandler
@@ -126,6 +127,7 @@ def group_data(**context):
     """
     將 GR 資料依照廠商和工廠分組
     """
+    db_handler = DBHandler()
     # 定義最多次出現的值（mode）(重複值取最後一個)
     def most_common(x):
         return x.mode().iloc[-1] if not x.mode().empty else None
@@ -140,7 +142,7 @@ def group_data(**context):
     print("✅ 成功取得 GR 資料，前幾筆資料如下：")
     print(df.head())
 
-    # 執行 group by + 聚合 (年度、廠別、供應商)
+    # 執行 group by + 聚合 (年度、廠別、供應商) -------------------------------------------------------------
     grouped_df = df.groupby(["WERKS", "PARTNER"], as_index=False).agg({
         "LFGJA": lambda x: ', '.join(sorted(set(x))), # 年度 e.g. 2023, 2024
         "NAME_ORG1": "first", # 供應商名稱
@@ -151,12 +153,179 @@ def group_data(**context):
         # "NAME1_TEXT": most_common, # 要用 ACCOUNT 對應出 NAME1_TEXT
         "EKNAM": "first", # 採購員 姓名
         "SkipReason": "first", # 跳過原因
+        "Comment": "first", # 考核結果
     })
 
     # 用 ACCOUNT 從原始 df 中對應出 NAME1_TEXT
     name_map = df[["ACCOUNT", "NAME1_TEXT"]].dropna().drop_duplicates()
-    grouped_df = pd.merge(grouped_df, name_map, on="ACCOUNT", how="left")
+    df = pd.merge(grouped_df, name_map, on="ACCOUNT", how="left")
     print("✅ 成功對應出 NAME1_TEXT，前幾筆資料如下：")
-    print(grouped_df.head())
+    print(df.head())
+
+    # 抓出 BPM 帳號資料 -----------------------------------------------------------------------------------
+    bpm_account_df = db_handler.get_BPM_account()
+    print("✅ 成功取得 BPM 帳號資料，前幾筆資料如下：")
+    print(bpm_account_df.head())
+    # 依廠別指定 採購員
+    buyer_account_df = pd.DataFrame([
+        {"WERKS": "1001", "BuyerAccount": "lillian_wang", "BuyerName": "王靜慧 Lillian Wang"},
+        {"WERKS": "1002", "BuyerAccount": "", "BuyerName": "台中採"}
+        # {"WERKS": "1002", "BuyerAccount": "emily_wu", "BuyerName": "吳瑞景 Emily Wu"}
+    ])
+
+    # join BPM 帳號 (驗收人、採購員)
+    df = pd.merge(
+        df,
+        bpm_account_df,
+        left_on='ACCOUNT',
+        right_on='HRID',
+        how='left',
+        suffixes=('', '_BPM')
+    )
+    df = pd.merge(
+        df,
+        buyer_account_df,
+        left_on='WERKS',
+        right_on='WERKS',
+        how='left',
+        suffixes=('', '_Buyer')
+    )
+    df = df.fillna("")
+    # 若 對應不到BPM account，則使用 原驗收人 name
+    df.loc[df["AssessorName"] == "", "AssessorName"] = df["NAME1_TEXT"]
+    print("✅ 成功 join BPM 帳號，前幾筆資料如下：")
+    print(df.head())
+
+    # 整理欄位名稱、刪除多餘欄位 --------------------------------------------------------------------------------------
+    df = df.rename(columns={
+        'LFGJA': 'GR_Year',
+        'WERKS': 'Plant',
+        'PARTNER': 'PartnerCode',
+        'NAME_ORG1': 'PartnerName',
+        'TAXNUM': 'TaxNum',
+        'NETWR': 'Amount',
+        'Comment': 'LastYearComment'
+    })
+    df = df[[
+        'Plant', 'PartnerCode', 'GR_Year', 'PartnerName', 'TaxNum', 'Amount',
+        'WAERS', 'AssessorAccount', 'AssessorName', 'AssessorDept', 'AssessorDeptShort', 'BuyerAccount', 'BuyerName',
+        'LastYearComment', "SkipReason"
+    ]]
+    # 補上 考核年度
+    df["AssessmentYear"] = current_year
+    print("✅ 成功整理欄位名稱，前幾筆資料如下：")
+    print(df.head())
+
+    db_handler.shutdown()
+    return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
+
+def insert_pending_list(**context):
+    """
+    將分組後的 GR 資料寫入資料庫
+    """
+    db_handler = DBHandler()
+    grouped_data = context["ti"].xcom_pull(task_ids="group_data")
     
+    if not grouped_data:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+
+    df = pd.DataFrame(grouped_data)
+    print("✅ 成功取得分組後的 GR 資料，前幾筆資料如下：")
+    print(df.head())
+
+    # 清空 TMP_PendingSupplierAssessment 資料表
+    db_handler.del_table('TMP_PendingSupplierAssessment')
+    print("✅ 成功清空 TMP_PendingSupplierAssessment 資料表")
+
+    # 寫入資料庫
+    db_handler.insert_to_TMP_PendingSupplierAssessment(df)
+    print("✅ 成功寫入 BPM 考核結果資料表")
+
+    db_handler.shutdown()
+
+def insert_crawler_list(**context): # REF_partner_crawler_list
+    """
+    將爬蟲清單寫入資料庫
+    """
+    db_handler = DBHandler()
+    grouped_data = context["ti"].xcom_pull(task_ids="group_data")
     
+    if not grouped_data:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+
+    df = pd.DataFrame(grouped_data)
+    print("✅ 成功取得分組後的 GR 資料，前幾筆資料如下：")
+    print(df.head())
+    print(df.info())
+
+    # 排除 台北不考核 廠商
+    partner_df = pd.DataFrame()
+    partner_df['partner_name'] = df[~df["SkipReason"].str.contains("不考核")][["PartnerName"]].drop_duplicates()
+    print("✅ 成功排除不考核廠商，前幾筆資料如下：")
+    print(partner_df.head())
+
+    # 清空 REF_partner_crawler_list 資料表
+    db_handler.del_table('REF_partner_crawler_list')
+    print("✅ 成功清空 REF_partner_crawler_list 資料表")
+
+    # 寫入資料庫
+    db_handler.insert_to_REF_partner_crawler_list(partner_df)
+    print("✅ 成功寫入 BPM 考核結果資料表")
+
+    db_handler.shutdown()
+
+def gen_attchments(**context):
+    """
+    生成附件
+    """
+    db_handler = DBHandler()
+    # 取得資料
+    pending_list_df = db_handler.get_specific_table('TMP_PendingSupplierAssessment')
+    crawler_list_df = db_handler.get_specific_table('REF_partner_crawler_list')
+    clean_data = context["ti"].xcom_pull(task_ids="clean_data")
+    clean_data_df = pd.DataFrame(clean_data)
+    get_GR_data = context["ti"].xcom_pull(task_ids="get_GR_data")
+    get_GR_data_df = pd.DataFrame(get_GR_data)
+
+    print(pending_list_df.head())
+    print(crawler_list_df.head())
+    print(clean_data_df.head())
+    print(get_GR_data_df.head())
+
+    # 檔名與路徑
+    tz = pendulum.timezone("Asia/Taipei")
+    local_time = context["execution_date"].in_timezone(tz)
+    file_name = f"FinalData__{context['dag'].dag_id}__{local_time.strftime('%Y%m%d_%H%M')}.xlsx"
+    file_path = f"/opt/airflow/export/{file_name}"
+
+    print("開始匯出結果至Excel...")
+
+    with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+        sheet_written = False
+
+        if not pending_list_df.empty:
+            pending_list_df.to_excel(writer, sheet_name="待考核供應商", index=False)
+            sheet_written = True
+
+        if not crawler_list_df.empty:
+            crawler_list_df.to_excel(writer, sheet_name="爬蟲清單", index=False)
+            sheet_written = True
+
+        if not clean_data_df.empty:
+            clean_data_df.to_excel(writer, sheet_name="GR資料(Clean)", index=False)
+            sheet_written = True
+        
+        if not get_GR_data_df.empty:
+            get_GR_data_df.to_excel(writer, sheet_name="GR資料(Raw)", index=False)
+            sheet_written = True
+
+        # 如果都沒資料，至少寫入一個空 sheet
+        if not sheet_written:
+            pd.DataFrame({"empty": []}).to_excel(writer, sheet_name="EMPTY", index=False)
+            print("❌ 查無任何結果，已生成空白 sheet。")
+        else:
+            print(f"✅ 成功寫入 Excel 檔案: {file_path}")
+
+    db_handler.shutdown()  
+    print("✅ 附件生成完成")
+    return [file_path]  # 將檔案路徑放入列表中
