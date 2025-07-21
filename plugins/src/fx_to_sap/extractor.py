@@ -11,6 +11,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from datetime import date
+import pendulum
 
 def crawl_cpt_fx(): # 海關常見幣別
     # 設定下載路徑
@@ -171,12 +172,15 @@ def crawl_oanda_fx(): # 特殊幣別
                 continue
 
             # insert to results
+            tz = pendulum.timezone("Asia/Taipei")
+            today_str = pendulum.now(tz).format("YYYYMMDD")
+
             results.append({
                 "from_curr": from_curr,
                 "to_curr": to_curr,
                 "fx_rate": value,
-                "start": date.today().strftime("%Y%m%d"),  # 日期設為今天
-                "end": date.today().strftime("%Y%m%d"),  # 日期設為今天
+                "start": today_str,  # 日期設為今天
+                "end": today_str,  # 日期設為今天
             })
 
     print("✅ All fx rates fetched successfully:", results)
