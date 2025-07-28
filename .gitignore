@@ -40,3 +40,6 @@ downloads/
 
 # export
 export/
+
+# PostgreSQL
+postgres-data/
