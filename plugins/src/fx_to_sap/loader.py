@@ -88,8 +88,12 @@ def gen_attchments(**context):
     pprint("✅ 成功取得xcom，資料如下：")
     pprint(final_data)
 
+    # 檔名與路徑
     tz = pendulum.timezone("Asia/Taipei")
-    local_time = context["execution_date"].in_timezone(tz)
+    start_date = context["dag_run"].start_date
+    if not isinstance(start_date, pendulum.DateTime):
+        start_date = pendulum.instance(start_date)
+    local_time = start_date.in_timezone(tz)
 
     # 寫入 Excel 檔案 ----------------------------------------------------------------------------------------
     df = pd.DataFrame(final_data)
