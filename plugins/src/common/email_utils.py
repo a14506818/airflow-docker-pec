@@ -9,6 +9,9 @@ email_receiver_list = Variable.get("email_receiver_list", deserialize_json=True)
 def send_success_email(dag_id: str, description: str, execution_date, to: list, attachments: list = None):
     logging.info("📤 Preparing to send success notification email...")
     tz = pendulum.timezone("Asia/Taipei")
+     # ✅ 確保是 pendulum datetime
+    if not isinstance(execution_date, pendulum.DateTime):
+        execution_date = pendulum.instance(execution_date)
     local_time = execution_date.in_timezone(tz)
 
     subject = f"[Airflow] DAG Execution Success - {dag_id}"
@@ -46,7 +49,7 @@ def on_success(context): # 前一個task 必須是 gen_attchments，才會寄附
     send_success_email(
         dag_id=context['dag'].dag_id,
         description=context['dag'].description,
-        execution_date=context['execution_date'],
+        execution_date=context['dag_run'].start_date, # context['execution_date'],
         to=email_receiver_list,
         attachments=xcom_value  # 可加參數傳路徑
     )
@@ -54,6 +57,9 @@ def on_success(context): # 前一個task 必須是 gen_attchments，才會寄附
 def send_failure_email(dag_id: str, description: str, execution_date, to: list):
     logging.info("📤 Preparing to send failure notification email...")
     tz = pendulum.timezone("Asia/Taipei")
+     # ✅ 確保是 pendulum datetime
+    if not isinstance(execution_date, pendulum.DateTime):
+        execution_date = pendulum.instance(execution_date)
     local_time = execution_date.in_timezone(tz)
 
     subject = f"[Airflow] DAG Execution Failed - {dag_id}"
@@ -72,6 +78,6 @@ def on_failure(context):
     send_failure_email(
         dag_id=context['dag'].dag_id,
         description=context['dag'].description,
-        execution_date=context['execution_date'],
+        execution_date=context['dag_run'].start_date, # context['execution_date'],
         to=email_receiver_list
     )

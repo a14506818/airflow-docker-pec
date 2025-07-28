@@ -138,7 +138,10 @@ def gen_attchments(**context):
 
     # 檔名與路徑
     tz = pendulum.timezone("Asia/Taipei")
-    local_time = context["execution_date"].in_timezone(tz)
+    start_date = context["dag_run"].start_date
+    if not isinstance(start_date, pendulum.DateTime):
+        start_date = pendulum.instance(start_date)
+    local_time = start_date.in_timezone(tz)
     file_name = f"FinalData__{context['dag'].dag_id}__{local_time.strftime('%Y%m%d_%H%M')}.xlsx"
     file_path = f"/opt/airflow/export/{file_name}"
 
