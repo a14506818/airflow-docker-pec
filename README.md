@@ -143,7 +143,7 @@ docker compose up -d
 
 ### 6. Access the Airflow UI
 
-* **URL (behind Nginx):** `https://airflow-test.pharmaessentia.com`
+* **URL (behind Nginx):** `http://airflow-test.pharmaessentia.com`
 
   * The domain is routed through the `nginx/` reverse‑proxy container. Adjust DNS or `/etc/hosts` as needed.
   * TLS certificates should be placed in `nginx/ssl/` (or via an automated Let’s Encrypt flow) and referenced in `default.conf`.
