@@ -234,6 +234,8 @@ services:
         fi
         mkdir -p /sources/logs /sources/dags /sources/plugins /sources/downloads /sources/export
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins,downloads,export}
+        mkdir -p /postgres-data
+        chown -R 999:999 /postgres-data
         exec /entrypoint airflow version
     # yamllint enable rule:line-length
     environment:
@@ -249,6 +251,7 @@ services:
     volumes:
       - .:/sources
       - ./plugins/nwrfcsdk:/opt/nwrfcsdk
+      - ./postgres-data:/postgres-data
 
   airflow-cli:
     <<: *airflow-common

@@ -1,164 +1,190 @@
 # Apache Airflow on Docker 🪂
 
-This repository contains a pre-configured Docker-based setup of [Apache Airflow](https://airflow.apache.org/) using `docker-compose`. It is suitable for development, testing, and deployment of DAGs.
+This repository contains a pre-configured Docker-based setup of [Apache Airflow](https://airflow.apache.org/) using `docker-compose`. It is suitable for development, testing, and deployment of DAGs with SAP integration, Excel/CSV processing, browser automation, and SQL Server access.
 
 ## 🏗️ Stack Overview
 
-This Airflow project is containerized with Docker and designed for running complex DAGs with SAP integration, Excel/CSV processing, browser automation, and SQL Server access.
+This Airflow project is containerized with Docker and designed for running complex DAGs using CeleryExecutor. Additional services include Redis as the broker, PostgreSQL as metadata DB, and Nginx as a reverse proxy.
 
-- **Apache Airflow** `2.9.0`
-- **Python** `3.9`
-- **Executor**: `CeleryExecutor`
-- **Database**: `PostgreSQL 13`
-- **Broker**: `Redis`
-- **Base Image**: `apache/airflow:2.9.0-python3.9`
-- **Custom Additions**:
-  - ✅ `pyrfc` (SAP RFC)
-  - ✅ `openpyxl`, `pandas` (Excel/CSV processing)
-  - ✅ `selenium`, `webdriver-manager`, `xvfb` (Headless Chrome automation)
-  - ✅ `pyodbc`, `msodbcsql17` (SQL Server driver for ODBC)
-  - ✅ `python-dotenv` (env var management)
-- **Plugin Folders**:
-  - `plugins/src/`: custom Python logic
-  - `plugins/nwrfcsdk/`: SAP RFC SDK
-- **Custom Dockerfile**: builds image with all above dependencies
-- **Volume Mapping**:
-  - `dags/`, `plugins/`, `logs/`, `downloads/`, `export/`
-- **Startup**: Requires `docker compose build` before `up -d` (due to custom image)
+* **Apache Airflow**: 2.9.0
+* **Python**: 3.9
+* **Executor**: CeleryExecutor
+* **Metadata Database**: PostgreSQL 13 (persistent in `postgres-data/`)
+* **Broker**: Redis
+* **Reverse Proxy**: Nginx
+* **Base Image**: `apache/airflow:2.9.0-python3.9`
+* **Custom Additions**:
+
+  * `pyrfc` (SAP RFC)
+  * `openpyxl`, `pandas` (Excel/CSV processing)
+  * `selenium`, `webdriver-manager`, `xvfb` (Headless Chrome automation)
+  * `pyodbc`, `msodbcsql17` (SQL Server driver)
+  * `python-dotenv` (env var management)
+* **Plugin Folders**:
+
+  * `plugins/src/`: custom Python logic
+  * `plugins/nwrfcsdk/`: SAP NetWeaver RFC SDK
+* **Custom Dockerfile**: builds image with all dependencies
+* **Volume Mapping**:
+
+  * `dags/`, `plugins/`, `logs/`, `downloads/`, `export/`, `nginx/`, `postgres-data/`
 
 ## 📁 Folder Structure
 
 ```
 .
 ├── dags/                        # Your DAG files
-│   └── .env                     # DAG-level connection settings 
+│   └── .env                     # DAG-level connection settings
+├── downloads/                   # Temporary or input files
+├── export/                      # Exported reports/files
 ├── logs/                        # Airflow logs (auto-generated)
 ├── plugins/                     # Custom plugins
-│   ├── src/                     # Custom Python modules (your business logic)
-│   └── nwrfcsdk/                # SAP NetWeaver RFC SDK library (for pyrfc)
-├── downloads/                   # Folder for temporary or input files
-├── export/                      # Folder for exported reports/files
-├── .env                         # Global environment variables (AIRFLOW_UID, SMTP, etc.)
-├── docker-compose.yaml          # Docker Compose setup for Airflow
-├── Dockerfile                   # Custom Dockerfile (e.g., installing pyrfc, openpyxl)
-└── README.md                    # Project documentation
-
+│   ├── src/                     # Custom Python modules
+│   └── nwrfcsdk/                # SAP NetWeaver RFC SDK
+├── nginx/                       # Nginx configuration for reverse proxy
+│   └── default.conf             # Example vhost config
+├── postgres-data/               # Persistent PostgreSQL data volume
+├── .env                         # Global environment variables
+├── docker-compose.yaml          # Docker Compose setup for Airflow + Redis + Postgres + Nginx
+├── Dockerfile                   # Custom image to install Python dependencies
+└── README.md                    # This documentation
 ```
 
 ## 🚀 Getting Started
-### 0. Installation
 
-##### a. Git
-##### b. Docker
+### 0. Prerequisites
+
+* Install Git
+* Install Docker & Docker Compose
 
 ### 1. Clone the repository
 
 ```bash
 git clone https://github.com/a14506818/airflow-docker-pec.git
 cd airflow-docker-pec
-
 git checkout <branch-name>
 ```
 
-### 2. Set .env files
+### 2. Configure `.env` files
 
-There are two .env files, one in root folder another in dags folder.
+#### Root `.env`
 
-root:
 ```bash
-AIRFLOW_UID=<run 'id -u'>
-
+AIRFLOW_UID=$(id -u)
 AIRFLOW__EMAIL__EMAIL_BACKEND=airflow.utils.email.send_email_smtp
-AIRFLOW__SMTP__SMTP_HOST=<your host IP>
-AIRFLOW__SMTP__SMTP_PORT=<your host port>
+AIRFLOW__SMTP__SMTP_HOST=<your-smtp-host>
+AIRFLOW__SMTP__SMTP_PORT=<your-smtp-port>
 AIRFLOW__SMTP__SMTP_STARTTLS=False
 AIRFLOW__SMTP__SMTP_SSL=False
-AIRFLOW__SMTP__SMTP_MAIL_FROM=Airflow_UAT@PharmaEssentia.com
+AIRFLOW__SMTP__SMTP_MAIL_FROM=airflow@example.com
 ```
 
-dags:
+#### `dags/.env`
+
 ```bash
-DB_DRIVER=ODBC Driver 17 for SQL Server
-DB_SERVER=<your server IP>
-DB_DATABASE=<your DB name>
-DB_USERNAME=<your user>
-DB_PASSWORD=<your pwd>
+# Default (Production) DB
+DB_DRIVER="ODBC Driver 17 for SQL Server"
+DB_SERVER=<PROD_DB_SERVER>
+DB_DATABASE=<PROD_DB_NAME>
+DB_USERNAME=<PROD_DB_USER>
+DB_PASSWORD=<PROD_DB_PASSWORD>
 
-SAP_USER=<your user>
-SAP_PASS=<your pwd>
-SAP_ASHOST=<your host IP>
-SAP_SYSNR=00
-SAP_CLIENT=<your client>
-SAP_LANG=EN
+# SAP System for BPM
+SAP_USER=<SAP_USER>
+SAP_PASS=<SAP_PASSWORD>
+SAP_ASHOST=<SAP_ASHOST>
+SAP_SYSNR=<SAP_SYSNR>
+SAP_CLIENT=<SAP_CLIENT>
+SAP_LANG=<SAP_LANG>
+
+# UAT Database
+UAT_DB_DRIVER="ODBC Driver 17 for SQL Server"
+UAT_DB_SERVER=<UAT_DB_SERVER>
+UAT_DB_DATABASE=<UAT_DB_NAME>
+UAT_DB_USERNAME=<UAT_DB_USER>
+UAT_DB_PASSWORD=<UAT_DB_PASSWORD>
+
+# Production Database (Optional override)
+PRD_DB_DRIVER="ODBC Driver 17 for SQL Server"
+PRD_DB_SERVER=<PRD_DB_SERVER>
+PRD_DB_DATABASE=<PRD_DB_NAME>
+PRD_DB_USERNAME=<PRD_DB_USER>
+PRD_DB_PASSWORD=<PRD_DB_PASSWORD>
 ```
 
-### 3. Set Project Permission
+### 3. Set Permissions
+
 ```bash
 sudo chown -R $USER:$USER ./
 ```
 
 ### 4. Initialize Airflow
+
 ```bash
 docker compose up airflow-init
 ```
 
-### 5. Start the Airflow services
+### 5. Build and Start Services
 
 ```bash
 docker compose build --no-cache
 docker compose up -d
 ```
 
+**Tips:**
+
+* To update DAGs: `docker compose restart`
+* To rebuild image after updating `Dockerfile`:
+
 ```bash
-# First time
-docker compose build --no-cache
-docker compose up -d
-
-# Update Dads
-docker compose restart
-
-# Update Dockerfile
 docker compose build
 docker compose up -d
 ```
 
 ### 6. Access the Airflow UI
 
-- URL: [http://localhost:8080](http://localhost:8080)
-- URL: [http://ip_address:8080](http://ip_address:8080)
-- Default login:
-  - **Username:** `airflow`
-  - **Password:** `airflow`
+* **URL (behind Nginx):** `https://airflow-test.pharmaessentia.com`
 
-Allow Others to Connent server:
+  * The domain is routed through the `nginx/` reverse‑proxy container. Adjust DNS or `/etc/hosts` as needed.
+  * TLS certificates should be placed in `nginx/ssl/` (or via an automated Let’s Encrypt flow) and referenced in `default.conf`.
+* **Local fallback:** `http://localhost:8080` or `http://<host-ip>:8080`
+* **Default login:** `airflow` / `airflow`
+
+### 7. Configure Firewall Settings
+
 ```bash
-# close firewall
-sudo iptables -L -n | grep 8080
+# Allow HTTP and HTTPS traffic (adjust ports as needed)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# If using a cloud provider, update security group or firewall rules accordingly.
 ```
+
+Make sure ports **80/443** (or your exposed ports) are open on the host if you need external access.
 
 ---
 
-## 🛠 Common Commands
+## 🛠️ Common Commands
 
-| Command | Description |
-|--------|-------------|
-| `docker compose ps` | View running containers |
-| `docker compose logs -f` | Follow logs |
-| `docker compose down` | Stop all services |
-| `docker compose up -d` | Start services in background |
-| `docker compose exec airflow-webserver bash` | Shell into container |
+| Command                                      | Description                        |
+| -------------------------------------------- | ---------------------------------- |
+| `docker compose ps`                          | View running containers            |
+| `docker compose logs -f`                     | Follow all logs                    |
+| `docker compose down`                        | Stop and remove containers         |
+| `docker compose up -d`                       | Start services in detached mode    |
+| `docker compose exec airflow-webserver bash` | Shell into the webserver container |
 
 ---
 
 ## ⚠️ Notes
 
-- All DAGs must be placed in the `dags/` folder.
-- Make sure to restart services after modifying `docker-compose.yaml` or `.env`.
-- Use `XCom` or Airflow Variables to pass values between tasks.
-- Avoid writing heavy logic directly in DAG files—use functions.
+* Place all DAG files in `dags/`.
+* Restart services after updating `docker-compose.yaml`, `Dockerfile`, or `.env`.
+* Use XComs or Airflow Variables for inter-task communication.
+* Keep DAG files lightweight; move heavy logic into `plugins/src/`.
 
 ---
 
 ## 📄 License
 
-MIT © [Justin Yang]
+MIT © \[Justin Yang]
