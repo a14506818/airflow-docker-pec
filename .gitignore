@@ -43,3 +43,6 @@ export/
 
 # PostgreSQL
 postgres-data/
+
+# Nginx config
+nginx/default.conf
