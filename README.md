@@ -56,6 +56,7 @@ This Airflow project is containerized with Docker and designed for running compl
 
 * Install Git
 * Install Docker & Docker Compose
+* Install ufw
 
 ### 1. Clone the repository
 
@@ -112,20 +113,53 @@ PRD_DB_USERNAME=<PRD_DB_USER>
 PRD_DB_PASSWORD=<PRD_DB_PASSWORD>
 ```
 
-### 3. Set Permissions
+### 3. Configure Nginx Config
+
+#### Create folder and file
+```bash
+mkdir nginx
+touch nginx/default.conf
+```
+
+#### Write `default.conf`
+```bash
+server {
+    listen 80;
+    server_name <your-damain-name>;
+
+    location / {
+        proxy_pass http://airflow-webserver:8080;  # airflow webserver container port
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+```
+
+### 4. Set Permissions
 
 ```bash
 sudo chown -R $USER:$USER ./
 ```
 
-### 4. Initialize Airflow
+### 5. Initialize Airflow
 
 ```bash
 docker compose up airflow-init
 ```
 
-### 5. Build and Start Services
 
+### 6. Build and Start Services
+
+#### Set Docker Permissions (Run Without sudo)
+```bash
+sudo usermod -aG docker $USER
+newgrp docker  # Reload group membership, or log out and log back in
+```
+
+#### Build
 ```bash
 docker compose build --no-cache
 docker compose up -d
@@ -141,16 +175,16 @@ docker compose build
 docker compose up -d
 ```
 
-### 6. Access the Airflow UI
+### 7. Access the Airflow UI
 
-* **URL (behind Nginx):** `http://airflow-test.pharmaessentia.com`
+* **URL (behind Nginx):** `<your-domain-name>`
 
   * The domain is routed through the `nginx/` reverse‑proxy container. Adjust DNS or `/etc/hosts` as needed.
   * TLS certificates should be placed in `nginx/ssl/` (or via an automated Let’s Encrypt flow) and referenced in `default.conf`.
 * **Local fallback:** `http://localhost:8080` or `http://<host-ip>:8080`
 * **Default login:** `airflow` / `airflow`
 
-### 7. Configure Firewall Settings
+### 8. Configure Firewall Settings
 
 ```bash
 # Allow HTTP and HTTPS traffic (adjust ports as needed)
