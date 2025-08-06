@@ -6,7 +6,8 @@ from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 
-from src.bank_data_checker.extractor import crawl_bank_data
+from src.bank_data_checker.extractor import crawl_bank_data, get_SAP_bank_list
+from src.bank_data_checker.comparator import compare_sap_and_crawl_bank_list
 
 from src.common.email_utils import on_success, on_failure  
 
@@ -44,13 +45,26 @@ with DAG(
     #     python_callable=check_rfc
     # )
 
+    get_SAP_bank_list_task = PythonOperator(
+        task_id="get_SAP_bank_list",
+        python_callable=get_SAP_bank_list
+    )
+
     crawl_bank_data_task = PythonOperator(
         task_id="crawl_bank_data",
         python_callable=crawl_bank_data
     )
 
+    compare_sap_and_crawl_bank_list_task = PythonOperator(
+        task_id="compare_sap_and_crawl_bank_list",
+        python_callable=compare_sap_and_crawl_bank_list
+    )
+
+
+    
+
 
     # start >> [check_selenium_task, check_rfc_task] >> crawl_bank_data_task >> end
-    start >> crawl_bank_data_task >> end
+    start >> [get_SAP_bank_list_task, crawl_bank_data_task] >> compare_sap_and_crawl_bank_list_task >> end
 
 

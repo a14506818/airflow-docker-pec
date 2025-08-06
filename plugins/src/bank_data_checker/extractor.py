@@ -1,19 +1,42 @@
 import os
 import pandas as pd
 
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+def get_SAP_bank_list(PI_BANKS: str = 'TW'): # ------------------------------------------------------------------------------
+    from pyrfc import Connection
+    from src.common.common import get_sap_conn_params
 
-from selenium.webdriver.support.ui import WebDriverWait
+    conn_params = get_sap_conn_params()
+    conn = Connection(**conn_params)
 
-# from datetime import date
-# import pendulum
+    # 呼叫 SAP RFC
+    rfc_result = conn.call('Z_FI_BPM_008', PI_BANKS=PI_BANKS)
+    print("rfc_result: ", rfc_result)
+
+    # 正確轉成 DataFrame（注意不要用 [] 包住）
+    df = pd.DataFrame(rfc_result['PT_OUT'])
+
+    print("✅ SAP 銀行資料如下：")
+    print(df.head())
+
+    # 只保留需要的欄位，並重新命名
+    df = df.rename(columns={
+        "BANKL": "bank_code",
+        "BANKA": "bank_name",
+    })[["bank_code", "bank_name"]]
+
+    print(df.head())
+    
+    return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
 
 def crawl_bank_data():
     """
     爬取銀行資料
     """
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.webdriver.support.ui import WebDriverWait
+
     # 設定下載路徑
     download_dir = "/opt/airflow/downloads"
     os.makedirs(download_dir, exist_ok=True)
@@ -73,8 +96,11 @@ def crawl_bank_data():
     df = pd.read_csv(csv_path, sep='\t', encoding='utf-16')
     # 清理 ="xxx" 格式（Excel 匯出格式）
     df = df.applymap(lambda x: str(x).replace('="', '').replace('"', '').strip())
-    df = df.iloc[:, :3]
-    df.columns = ['bank_code', 'bank_name', 'update_date']
+    df = df.iloc[:, :2]
+    df.columns = ['bank_code', 'bank_name']
     print(df.head())
 
     return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
+
+
+
