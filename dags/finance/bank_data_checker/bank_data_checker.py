@@ -34,15 +34,23 @@ with DAG(
         # on_success_callback=on_success
     )
 
-    check_selenium_task = PythonOperator(
-        task_id="check_selenium_connection",
-        python_callable=check_selenium
+    # check_selenium_task = PythonOperator(
+    #     task_id="check_selenium_connection",
+    #     python_callable=check_selenium
+    # )
+
+    # check_rfc_task = PythonOperator(
+    #     task_id="check_rfc_connection",
+    #     python_callable=check_rfc
+    # )
+
+    crawl_bank_data_task = PythonOperator(
+        task_id="crawl_bank_data",
+        python_callable=crawl_bank_data
     )
 
-    check_rfc_task = PythonOperator(
-        task_id="check_rfc_connection",
-        python_callable=check_rfc
-    )
 
-    start >> [check_selenium_task, check_rfc_task] >> end
+    # start >> [check_selenium_task, check_rfc_task] >> crawl_bank_data_task >> end
+    start >> crawl_bank_data_task >> end
+
 
