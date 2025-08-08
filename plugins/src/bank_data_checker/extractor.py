@@ -1,15 +1,18 @@
 import os
 import pandas as pd
 
-def get_SAP_bank_list(PI_BANKS: str = 'TW'): # ------------------------------------------------------------------------------
-    from pyrfc import Connection
-    from src.common.common import get_sap_conn_params
+from pyrfc import Connection
+from src.common.common import get_sap_conn_params
 
+import pendulum
+from datetime import datetime, date
+
+def get_SAP_partner_bank_list(**context):
     conn_params = get_sap_conn_params()
     conn = Connection(**conn_params)
 
     # 呼叫 SAP RFC
-    rfc_result = conn.call('Z_FI_BPM_008', PI_BANKS=PI_BANKS)
+    rfc_result = conn.call('Z_FI_BPM_017')
     print("rfc_result: ", rfc_result)
 
     # 正確轉成 DataFrame（注意不要用 [] 包住）
@@ -18,11 +21,17 @@ def get_SAP_bank_list(PI_BANKS: str = 'TW'): # ---------------------------------
     print("✅ SAP 銀行資料如下：")
     print(df.head())
 
+    # 只保留 BANKS = "TW"
+    df = df[df['BANKS'] == 'TW']
+
     # 只保留需要的欄位，並重新命名
     df = df.rename(columns={
         "BANKL": "bank_code",
-        "BANKA": "bank_name",
-    })[["bank_code", "bank_name"]]
+        "LIFNR": "Partner_Code",
+        "KOINH": "Partner_Name",
+    })[["bank_code", "Partner_Code", "Partner_Name"]]
+
+    df = df.dropna().drop_duplicates()
 
     print(df.head())
     
@@ -74,7 +83,7 @@ def crawl_bank_data():
     print("Chrome version:", driver.capabilities['browserVersion'])
     print("ChromeDriver version:", driver.capabilities['chrome']['chromedriverVersion'])
 
-    driver.get("https://www.banking.gov.tw/ch/ap/bnx_excel.jsp")
+    driver.get("https://www.banking.gov.tw/ch/ap/bankno_excel.jsp")
     print("✅ Selenium Works")
 
     # 等待檔案寫入
@@ -96,8 +105,8 @@ def crawl_bank_data():
     df = pd.read_csv(csv_path, sep='\t', encoding='utf-16')
     # 清理 ="xxx" 格式（Excel 匯出格式）
     df = df.applymap(lambda x: str(x).replace('="', '').replace('"', '').strip())
-    df = df.iloc[:, :2]
-    df.columns = ['bank_code', 'bank_name']
+    df = df.iloc[:, :3]
+    df.columns = ['code', 'bank_code', 'bank_name']
     print(df.head())
 
     return df.to_dict("records")  # ❗XCom 不支援直接傳 df，要先轉成 dict
