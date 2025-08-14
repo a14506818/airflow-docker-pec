@@ -6,7 +6,7 @@ from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 
-from src.bank_data_checker.extractor import crawl_bank_data, get_SAP_partner_bank_list
+from src.bank_data_checker.extractor import crawl_bank_data, crawl_bank_data_2, get_SAP_partner_bank_list
 from src.bank_data_checker.comparator import compare_sap_and_crawl_bank_list, gen_attchments
 
 from src.common.email_utils import on_success, on_failure  
@@ -24,8 +24,8 @@ with DAG(
     default_args={
         # "retries": 2,
         # "retry_delay": timedelta(minutes=1),
-        # "execution_timeout": timedelta(minutes=15),
-        # "on_failure_callback": on_failure,
+        "execution_timeout": timedelta(minutes=2),
+        "on_failure_callback": on_failure,
     }
 ) as dag:
     
@@ -56,6 +56,11 @@ with DAG(
         python_callable=crawl_bank_data
     )
 
+    crawl_bank_data_2_task = PythonOperator(
+        task_id="crawl_bank_data_2",
+        python_callable=crawl_bank_data_2
+    )
+
     compare_sap_and_crawl_bank_list_task = PythonOperator(
         task_id="compare_sap_and_crawl_bank_list",
         python_callable=compare_sap_and_crawl_bank_list
@@ -68,6 +73,7 @@ with DAG(
     
 
     start >> [check_selenium_task, check_rfc_task] >> mid \
-        >> [get_SAP_partner_bank_list_task, crawl_bank_data_task] >> compare_sap_and_crawl_bank_list_task >> gen_attchments_task >> end
+        >> [get_SAP_partner_bank_list_task, crawl_bank_data_task, crawl_bank_data_2_task] \
+        >> compare_sap_and_crawl_bank_list_task >> gen_attchments_task >> end
 
 

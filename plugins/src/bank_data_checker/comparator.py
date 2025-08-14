@@ -18,12 +18,22 @@ def compare_sap_and_crawl_bank_list(**context):
     print("✅ 成功取得xcom，前幾筆資料如下：")
     # print(sap_df)
 # =
-    scrawl_dict = ti.xcom_pull(task_ids="crawl_bank_data")
-    crawl_df = pd.DataFrame(scrawl_dict)
+    crawl_dict = ti.xcom_pull(task_ids="crawl_bank_data")
+    crawl_df = pd.DataFrame(crawl_dict)
     if crawl_df.empty:
         raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
     print("✅ 成功取得xcom，前幾筆資料如下：")
     # print(crawl_df)
+
+    crawl_2_dict = ti.xcom_pull(task_ids="crawl_bank_data_2")
+    crawl_2_df = pd.DataFrame(crawl_2_dict)
+    if crawl_2_df.empty:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+    print("✅ 成功取得xcom，前幾筆資料如下：")
+    # print(crawl_2_df)
+
+    # 合併兩個爬蟲結果 只保留 bank_code 欄位 (兩邊欄位不一致)
+    crawl_df = pd.concat([crawl_df[["bank_code"]], crawl_2_df[["bank_code"]]], ignore_index=True)
 
     # 去除空值與重複 --------------------------------------------------------------------------------------------
     sap_df = sap_df.dropna(subset=["bank_code"]).drop_duplicates()
@@ -61,6 +71,14 @@ def gen_attchments(**context):
     print(crawl_df)
 
     # get XCOM -----------------------------------------------------------------------------------------------
+    crawl_2_data = ti.xcom_pull(task_ids="crawl_bank_data_2")
+    if not crawl_2_data:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+    crawl_2_df = pd.DataFrame(crawl_2_data)
+    print("✅ 成功取得xcom，資料如下：")
+    print(crawl_2_df)
+
+    # get XCOM -----------------------------------------------------------------------------------------------
     diff_data = ti.xcom_pull(task_ids="compare_sap_and_crawl_bank_list")
     if not diff_data:
         raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
@@ -92,6 +110,10 @@ def gen_attchments(**context):
 
         if not crawl_df.empty:
             crawl_df.to_excel(writer, sheet_name="銀行局清單", index=False)
+            sheet_written = True
+
+        if not crawl_2_df.empty:
+            crawl_2_df.to_excel(writer, sheet_name="金資中心清單", index=False)
             sheet_written = True
         # 如果都沒資料，至少寫入一個空 sheet
         if not sheet_written:
