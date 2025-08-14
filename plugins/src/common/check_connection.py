@@ -43,11 +43,10 @@ def check_mssql():
     conn = pyodbc.connect(conn_str, timeout=5)
     conn.close()
     print("✅ MSSQL 連線成功")
-    return True
 
 def check_rfc():
     conn_params = get_sap_conn_params()
     print("SAP Connection Parameters:", conn_params)
     conn = Connection(**conn_params)
-    result = conn.call("STFC_CONNECTION")
+    result = conn.call("STFC_CONNECTION") 
     print("✅ SAP RFC 連線成功: ", result)
