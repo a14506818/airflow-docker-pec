@@ -44,4 +44,5 @@ RUN pip install --upgrade pip && \
         python-dotenv \
         pyrfc==3.3.1 \
         pandas \
-        openpyxl
+        openpyxl \
+        requests
