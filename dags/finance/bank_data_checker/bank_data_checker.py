@@ -25,6 +25,7 @@ with DAG(
         # "retries": 2,
         # "retry_delay": timedelta(minutes=1),
         "execution_timeout": timedelta(minutes=2),
+        "params": {"additional_email_receiver_list": "bank_data_checker_ERL"},
         "on_failure_callback": on_failure,
     }
 ) as dag:
