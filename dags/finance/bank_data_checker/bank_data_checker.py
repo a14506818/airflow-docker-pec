@@ -16,11 +16,11 @@ local_tz = timezone("Asia/Taipei")
 
 with DAG(
     dag_id="bank_data_checker",
-    schedule="0 9 * * 2",  # 每周二的 09:00
+    schedule="0 9 10,20 * *",  # 每月 10、20號，9:00 AM
     start_date = local_tz.datetime(2025, 1, 1, 0, 0, 0),
     catchup=False,
     tags=["finance", "bank", "data_checker"],
-    description="銀行資料檢查，每周二執行",
+    description="銀行資料檢查，每月 10、20號執行",
     default_args={
         # "retries": 2,
         # "retry_delay": timedelta(minutes=1),
