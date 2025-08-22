@@ -114,6 +114,9 @@ def crawl_cpt_fx(): # 海關常見幣別
         "code": "from_curr",
     })
 
+    # 精確到小數點後五位 (為了輸出到Excel 提前做)
+    df["fx_rate"] = df["fx_rate"].apply(lambda x: round(float(x), 5))
+
     print("✅ JSON to DataFrame 完成，共有筆數:", len(df))
     print(df)
 

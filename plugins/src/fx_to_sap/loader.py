@@ -84,11 +84,21 @@ def gen_attchments(**context):
     
     if not final_data:
         raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+    final_df = pd.DataFrame(final_data)
+    print("✅ 成功取得xcom，資料如下：")
+    print(final_df)
 
-    pprint("✅ 成功取得xcom，資料如下：")
-    pprint(final_data)
+    # get XCOM -----------------------------------------------------------------------------------------------
+    ti = context["ti"] # 取得 Task Instance
+    crawl_data = ti.xcom_pull(task_ids="crawl_fx_data")
+    
+    if not crawl_data:
+        raise ValueError("❌ 轉換成 DataFrame 後為空，請檢查上游任務")
+    crawl_df = pd.DataFrame(crawl_data)
+    print("✅ 成功取得xcom，資料如下：")
+    print(crawl_df)
 
-    # 檔名與路徑
+    # 檔名與路徑 ----------------------------------------------------------------------------------------------
     tz = pendulum.timezone("Asia/Taipei")
     start_date = context["dag_run"].start_date
     if not isinstance(start_date, pendulum.DateTime):
@@ -96,11 +106,26 @@ def gen_attchments(**context):
     local_time = start_date.in_timezone(tz)
 
     # 寫入 Excel 檔案 ----------------------------------------------------------------------------------------
-    df = pd.DataFrame(final_data)
     file_name = f"FinalData__{context['dag'].dag_id}__{local_time.strftime('%Y%m%d_%H%M')}.xlsx"
     file_path = f"/opt/airflow/export/{file_name}"
-    df.to_excel(file_path, index=False)
-    print(f"✅ 成功寫入 Excel 檔案: {file_path}")
+
+    print("開始匯出結果至Excel...")
+    with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+        sheet_written = False
+        if not final_df.empty:
+            final_df.to_excel(writer, sheet_name="寫入SAP資料", index=False)
+            sheet_written = True
+
+        if not crawl_df.empty:
+            crawl_df.to_excel(writer, sheet_name="爬蟲資料", index=False)
+            sheet_written = True
+
+        # 如果都沒資料，至少寫入一個空 sheet
+        if not sheet_written:
+            pd.DataFrame({"empty": []}).to_excel(writer, sheet_name="EMPTY", index=False)
+            print("❌ 查無任何結果，已生成空白 sheet。")
+        else:
+            print(f"✅ 成功寫入 Excel 檔案: {file_path}")
 
     file_path_list = [file_path]  # 將檔案路徑放入列表中
     return file_path_list
