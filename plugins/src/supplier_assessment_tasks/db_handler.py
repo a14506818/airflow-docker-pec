@@ -118,13 +118,29 @@ class DBHandler:
             "裁罰金額": "fine_amount",
             "裁罰備註": "fine_description"  
         }
-        #  source : MOL or ENV
+        FAT_COLUMNS_MAPPING = {
+            "run_key": "run_key",
+            "job_id": "job_id",
+            "事業單位": "company_name",
+            "事業單位統一編號": "company_taxnum",
+            "災害類型": "accident_type",
+            "罹災人數（數量）": "victim_count",
+            "業主": "owner_name",
+            "業主統一編號": "owner_taxnum",
+            "工程名稱": "project_name",
+            "場所（肇災處）": "location",
+            "發生日期": "accident_date",
+            "勞動檢查機構": "inspection_agency"
+        }
+        #  source : MOL or ENV or FAT
         if source == "MOL":
             COLUMNS_MAPPING = MOL_COLUMNS_MAPPING
         elif source == "ENV":
             COLUMNS_MAPPING = ENV_COLUMNS_MAPPING
+        elif source == "FAT":
+            COLUMNS_MAPPING = FAT_COLUMNS_MAPPING
         else:
-            raise ValueError("Invalid source type. Expected 'MOL' or 'ENV'.")
+            raise ValueError("Invalid source type. Expected 'MOL' or 'ENV' or 'FAT'.")
         # 欄位轉換
         df = df.rename(columns=COLUMNS_MAPPING)
         # 只保留 COLUMNS_MAPPING 定義的欄位

@@ -4,7 +4,7 @@ import pendulum
 import logging
 import os
 
-email_receiver_list = Variable.get("email_receiver_list", deserialize_json=True)
+
 
 def send_success_email(dag_id: str, description: str, execution_date, to: list, attachments: list = None):
     logging.info("📤 Preparing to send success notification email...")
@@ -44,8 +44,20 @@ def on_success(context): # 前一個task 必須是 gen_attchments，才會寄附
     except Exception as e:
         logging.error(f"❌ 無法取得上一個任務的 XCom 值: {e}")
         xcom_value = None  # 如果無法取得，則設為 None
+    # 取得 params 中的 additional_email_receiver_list ---------------------------------------------------------------
+    try:
+        p = context["params"]
+        additional_email_receiver_list_name = p.get("additional_email_receiver_list", "") 
+        additional_email_receiver_list = Variable.get(additional_email_receiver_list_name, deserialize_json=True)
+        logging.info(f"✅ 成功取得額外的 email 接收者列表: {additional_email_receiver_list}")
+    except Exception as e:
+        logging.error(f"❌ 無額外的 email 接收者列表: {e}")
+        additional_email_receiver_list = []
 
-    # 用來寄信
+    email_receiver_list = Variable.get("email_receiver_list", deserialize_json=True)
+    email_receiver_list += additional_email_receiver_list
+
+    # 用來寄信 -------------------------------------------------------------------------------------------------------
     send_success_email(
         dag_id=context['dag'].dag_id,
         description=context['dag'].description,
@@ -75,6 +87,19 @@ def send_failure_email(dag_id: str, description: str, execution_date, to: list):
     send_email(to=to, subject=subject, html_content=html_content)
 
 def on_failure(context):
+    # 取得 params 中的 additional_email_receiver_list ---------------------------------------------------------------
+    try:
+        p = context["params"]
+        additional_email_receiver_list_name = p.get("additional_email_receiver_list", "") 
+        additional_email_receiver_list = Variable.get(additional_email_receiver_list_name, deserialize_json=True)
+        logging.info(f"✅ 成功取得額外的 email 接收者列表: {additional_email_receiver_list}")
+    except Exception as e:
+        logging.error(f"❌ 無額外的 email 接收者列表: {e}")
+        additional_email_receiver_list = []
+
+    email_receiver_list = Variable.get("email_receiver_list", deserialize_json=True)
+    email_receiver_list += additional_email_receiver_list
+    # 用來寄信 -------------------------------------------------------------------------------------------------------
     send_failure_email(
         dag_id=context['dag'].dag_id,
         description=context['dag'].description,

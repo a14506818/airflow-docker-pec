@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pendulum import timezone
 
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
-from src.supplier_assessment_tasks.supplier_compliance_crawler import del_tmp_table, get_partner_list, crawl_compliance_data, copy_tmp_to_his_and_prd, gen_attchments
+from src.supplier_assessment_tasks.supplier_compliance_crawler import del_tmp_table, get_partner_list, crawl_FAT_data, crawl_compliance_data, copy_tmp_to_his_and_prd, gen_attchments
 
 from src.common.email_utils import on_success, on_failure  
 
@@ -59,6 +59,11 @@ with DAG(
         python_callable=get_partner_list
     )
 
+    crawl_FAT_data_task = PythonOperator(
+        task_id="crawl_FAT_data",
+        python_callable=crawl_FAT_data
+    )
+
     crawl_compliance_data_task = PythonOperator(
         task_id="crawl_compliance_data",
         python_callable=crawl_compliance_data
@@ -74,6 +79,6 @@ with DAG(
         python_callable=gen_attchments
     )
 
-
     start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> del_tmp_table_task \
-        >> get_partner_list_task >> crawl_compliance_data_task >> copy_tmp_to_his_and_prd_task >> gen_attchments_task >> end
+        >> get_partner_list_task >> [crawl_compliance_data_task, crawl_FAT_data_task] \
+        >> copy_tmp_to_his_and_prd_task >> gen_attchments_task >> end
