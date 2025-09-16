@@ -107,6 +107,7 @@ services:
   airflow-webserver:
     <<: *airflow-common
     command: webserver
+    networks: [default, edge]
     ports:
       - 8080:8080
     healthcheck:
@@ -289,6 +290,7 @@ services:
 
   nginx:
     image: nginx:latest
+    networks: [default, edge]
     container_name: nginx
     ports:
       - "80:80"  # 對外開放 HTTP 埠
@@ -298,6 +300,9 @@ services:
       - airflow-webserver  # 確保 Airflow Webserver 啟動後才啟動 Nginx
     restart: always
 
-
 volumes:
   postgres-db-volume:
+
+networks:
+  edge:
+    external: true

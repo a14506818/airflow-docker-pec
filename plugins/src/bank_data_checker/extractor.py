@@ -18,7 +18,7 @@ def get_SAP_partner_bank_list(**context):
     conn = Connection(**conn_params)
 
     # 呼叫 SAP RFC
-    rfc_result = conn.call('Z_FI_BPM_017')
+    rfc_result = conn.call('Z_FI_BPM_017', PI_BANKS='TW')  # PI_BANKS 可選 TW 或空白
     print("rfc_result: ", rfc_result)
 
     # 正確轉成 DataFrame（注意不要用 [] 包住）
@@ -26,9 +26,6 @@ def get_SAP_partner_bank_list(**context):
 
     print("✅ SAP 銀行資料如下：")
     print(df.head())
-
-    # 只保留 BANKS = "TW"
-    df = df[df['BANKS'] == 'TW']
 
     # 只保留需要的欄位，並重新命名
     df = df.rename(columns={
