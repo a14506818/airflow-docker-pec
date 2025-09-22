@@ -10,6 +10,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from decimal import Decimal, ROUND_HALF_UP
+
 from datetime import date
 import pendulum
 
@@ -115,7 +117,9 @@ def crawl_cpt_fx(): # 海關常見幣別
     })
 
     # 精確到小數點後五位 (為了輸出到Excel 提前做)
-    df["fx_rate"] = df["fx_rate"].apply(lambda x: round(float(x), 5))
+    # df["fx_rate"] = df["fx_rate"].apply(lambda x: round(float(x), 5))
+    df["fx_rate"] = df["fx_rate"].apply(lambda x: float(Decimal(str(x)).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)))
+
 
     print("✅ JSON to DataFrame 完成，共有筆數:", len(df))
     print(df)
