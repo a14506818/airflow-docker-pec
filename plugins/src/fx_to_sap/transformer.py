@@ -6,6 +6,8 @@ from pyrfc import Connection
 from datetime import date, datetime
 from decimal import Decimal
 
+from decimal import Decimal, ROUND_HALF_UP
+
 from src.common.common import get_mssql_conn_str, get_sap_conn_params
 
 def gen_fx_to_other_currencies(skipped=False, **context): # ---------------------------------------------------------------------------------------------------------------------
@@ -120,7 +122,8 @@ def clean_data_for_sap(rate_type=None, **context): # ---------------------------
     crawl_df["fx_rate"] = crawl_df["fx_rate"].apply(lambda x: Decimal(str(x)))
     crawl_df["from_ratio"] = crawl_df["from_ratio"].apply(lambda x: Decimal(str(x)))
     crawl_df["fx_rate_with_ratio"] = crawl_df["fx_rate"] * crawl_df["from_ratio"]
-    crawl_df["fx_rate_with_ratio"] = crawl_df["fx_rate_with_ratio"].apply(lambda x: round(float(x), 5))
+    # crawl_df["fx_rate_with_ratio"] = crawl_df["fx_rate_with_ratio"].apply(lambda x: round(float(x), 5))
+    crawl_df["fx_rate_with_ratio"] = crawl_df["fx_rate_with_ratio"].apply(lambda x: float(Decimal(str(x)).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)))
 
     print("✅ Data Cleaned：")
     print(crawl_df.head())
