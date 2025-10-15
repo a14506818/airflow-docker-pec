@@ -15,7 +15,7 @@ local_tz = timezone("Asia/Taipei")
 
 with DAG(
     dag_id="fx_common_to_sap_v",
-    schedule="0 3 17 * *",  # 每月 17 號的 03:00
+    schedule="30 9 17 * *",  # 每月 17 號的 09:30
     start_date = local_tz.datetime(2025, 1, 1, 0, 0, 0),
     catchup=False,
     tags=["fx", "SAP", "common", "typeV"],
