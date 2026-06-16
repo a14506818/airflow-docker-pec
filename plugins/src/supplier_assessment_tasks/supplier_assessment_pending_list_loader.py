@@ -128,9 +128,6 @@ def group_data(**context):
     將 GR 資料依照廠商和工廠分組
     """
     db_handler = DBHandler()
-    # 定義最多次出現的值（mode）(重複值取最後一個)
-    def most_common(x):
-        return x.mode().iloc[-1] if not x.mode().empty else None
 
     ti = context["ti"]  # 取得 Task Instance --------------------------------------------------------------
     gr_data = ti.xcom_pull(task_ids="clean_data")
@@ -143,18 +140,51 @@ def group_data(**context):
     print(df.head())
 
     # 執行 group by + 聚合 (年度、廠別、供應商) -------------------------------------------------------------
+    # 2026-05-20 更新 group by 邏輯：不再以 ACCOUNT 為基礎，改為以 (WERKS, PARTNER) 為基礎，從原始資料中選出代表 ACCOUNT
+        # 抓取邏輯如下：驗收人帳號 (ACCOUNT) 出現次數最多的 → 該帳號的 NETWR 總金額最高的 → ACCOUNT 字母序最大的
+        
+    # Step 1: 先針對 (WERKS, PARTNER, ACCOUNT) 計算 出現次數 與 NETWR 總和
+    account_stats = (
+        df.groupby(["WERKS", "PARTNER", "ACCOUNT"], as_index=False)
+        .agg(
+            AccountCount=("ACCOUNT", "size"),
+            AccountAmount=("NETWR", "sum"),
+        )
+    )
+
+    # Step 2: 依照 出現次數 desc → 該 account 總金額 desc → ACCOUNT desc 排序
+    account_stats = account_stats.sort_values(
+        by=["WERKS", "PARTNER", "AccountCount", "AccountAmount", "ACCOUNT"],
+        ascending=[True, True, False, False, False]
+    )
+
+    # Step 3: 每個 (WERKS, PARTNER) 取第一筆作為代表 ACCOUNT
+    representative_account = (
+        account_stats.groupby(["WERKS", "PARTNER"], as_index=False)
+                    .first()[["WERKS", "PARTNER", "ACCOUNT"]]
+    )
+
+    # Step 4: 主 group by(將原本的 ACCOUNT 聚合拿掉)
     grouped_df = df.groupby(["WERKS", "PARTNER"], as_index=False).agg({
-        "LFGJA": lambda x: ', '.join(sorted(set(x))), # 年度 e.g. 2023, 2024
-        "NAME_ORG1": "first", # 供應商名稱
-        "TAXNUM": "first", # 統編
-        "NETWR": "sum", # 總金額
-        "WAERS": "first", # 幣別
-        "ACCOUNT": most_common, # 驗收人 工號
-        # "NAME1_TEXT": most_common, # 要用 ACCOUNT 對應出 NAME1_TEXT
-        "EKNAM": "first", # 採購員 姓名
-        "SkipReason": "first", # 跳過原因
-        "Comment": "first", # 考核結果
+        "LFGJA": lambda x: ', '.join(sorted(set(x))),  # 年度 e.g. 2023, 2024
+        "NAME_ORG1": "first",   # 供應商名稱
+        "TAXNUM": "first",      # 統編
+        "NETWR": "sum",         # 總金額
+        "WAERS": "first",       # 幣別
+        # "ACCOUNT": 已改用 representative_account 處理
+        "EKNAM": "first",       # 採購員 姓名
+        "SkipReason": "first",  # 跳過原因
+        "Comment": "first",     # 考核結果
     })
+
+    # Step 5: 把代表 ACCOUNT merge 回主表
+    grouped_df = pd.merge(
+        grouped_df,
+        representative_account,
+        on=["WERKS", "PARTNER"],
+        how="left"
+    )
+    # ---------------------------------------------------------------------------------------------------
 
     # 用 ACCOUNT 從原始 df 中對應出 NAME1_TEXT
     name_map = df[["ACCOUNT", "NAME1_TEXT"]].dropna().drop_duplicates()
