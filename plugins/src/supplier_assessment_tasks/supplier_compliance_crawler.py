@@ -91,6 +91,15 @@ def crawl_compliance_data(**context):
     """
     loop供應商，產生JOB，執行爬蟲，寫入TMP
     """
+    import threading
+
+    # 每個 thread 自己的 DBHandler（解 pyodbc connection is busy）
+    _tls = threading.local()
+    def get_db():
+        if not hasattr(_tls, "db"):
+            _tls.db = DBHandler()
+        return _tls.db
+
     def with_retry(func, args=(), job_id='', kwargs=None, max_retries=10, wait_sec=1):
         if kwargs is None:
             kwargs = {}
@@ -99,7 +108,7 @@ def crawl_compliance_data(**context):
                 return func(*args, **kwargs)
             except Exception as e:
                 print(f"❌ 第 {attempt} 次失敗: {e}")
-                update_job_status(job_id, status="fail", error_msg=str(e))
+                get_db().update_job_status(job_id, status="fail", error_msg=str(e))
                 if attempt == max_retries:
                     raise
                 print("🔁 重試中...\n")
@@ -114,7 +123,7 @@ def crawl_compliance_data(**context):
         return env_crawler.crawl(name)
 
     # get XCOM -----------------------------------------------------------------------------------------------
-    ti = context["ti"] # 取得 Task Instance
+    ti = context["ti"]  # 取得 Task Instance
     company_names = ti.xcom_pull(task_ids="get_partner_list")
     if not company_names:
         raise ValueError("❌ 取得公司名稱清單為空，請檢查上游任務")
@@ -122,11 +131,8 @@ def crawl_compliance_data(**context):
     print(company_names[:10])
 
     # init ---------------------------------------------------------------------------------------------------
-    driver_path = "" # not needed, use ChromeDriverManager
-    db_handler = DBHandler()
-    insert_job = db_handler.insert_job
-    update_job_status = db_handler.update_job_status
-    insert_tmp_result = db_handler.insert_tmp_result
+    driver_path = ""  # not needed, use ChromeDriverManager
+    main_db = DBHandler()  # 主 thread 專用，負責建 JOB
     mol_results = []
     env_results = []
     error_logs = []
@@ -135,7 +141,7 @@ def crawl_compliance_data(**context):
     # 並行查詢 MOL 與 ENV -------------------------------------------------------------------------------------
     with ThreadPoolExecutor(max_workers=8) as executor:
         future_to_info = {}
-        job_ids = {} # 紀錄 JOB ID 對應的公司名稱與來源
+        job_ids = {}  # 紀錄 JOB ID 對應的公司名稱與來源
         for name in company_names:
             # 產生JOB
             for source in ['MOL', 'ENV']:
@@ -146,7 +152,7 @@ def crawl_compliance_data(**context):
                     "supplier_name": name,
                     "source_type": source
                 }
-                insert_job(job_data) 
+                main_db.insert_job(job_data)
                 job_ids[(name, source)] = job_id
             # 執行爬蟲
             future_to_info[executor.submit(with_retry, crawl_mol, args=(name,), job_id=job_ids[(name, 'MOL')])] = (name, 'MOL')
@@ -158,24 +164,21 @@ def crawl_compliance_data(**context):
             try:
                 result = future.result()
                 if not result.empty:
+                    result["run_key"] = run_key
+                    result["job_id"] = job_id
+                    get_db().insert_tmp_result(result, source)
                     if source == 'MOL':
                         mol_results.append(result)
-                        result["run_key"] = run_key
-                        result["job_id"] = job_ids[(name, source)]
-                        insert_tmp_result(result,'MOL')
                     elif source == 'ENV':
                         env_results.append(result)
-                        result["run_key"] = run_key
-                        result["job_id"] = job_ids[(name, source)]
-                        insert_tmp_result(result,'ENV')
-                update_job_status(job_id, status="success", error_msg='')
+                get_db().update_job_status(job_id, status="success", error_msg='')
             except Exception as e:
                 err = f"{source} 查詢 {name} 發生錯誤: {e}"
-                print("❌ ",err)
+                print("❌ ", err)
                 error_logs.append(err + '\n' + traceback.format_exc())
-                update_job_status(job_id, status="fail", error_msg=str(e))
-    
-    db_handler.shutdown()
+                get_db().update_job_status(job_id, status="fail", error_msg=str(e))
+
+    main_db.shutdown()
     print("✅ 所有爬蟲任務完成")
 
 def copy_tmp_to_his_and_prd():
