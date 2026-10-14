@@ -1,9 +1,10 @@
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from datetime import datetime, timedelta
 from pendulum import timezone
 
+from src.common.common import is_on_schedule
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.supplier_assessment_tasks.supplier_compliance_crawler import del_tmp_table, get_partner_list, crawl_FAT_data, crawl_compliance_data, copy_tmp_to_his_and_prd, gen_attchments
 
@@ -29,6 +30,10 @@ with DAG(
 ) as dag:
     
     start = EmptyOperator(task_id="start")
+    on_schedule_check = ShortCircuitOperator(
+        task_id="on_schedule_check",
+        python_callable=is_on_schedule
+    )
     end = EmptyOperator(
         task_id="end",
         on_success_callback=on_success
@@ -79,6 +84,6 @@ with DAG(
         python_callable=gen_attchments
     )
 
-    start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> del_tmp_table_task \
+    start >> on_schedule_check >> [check_selenium_task, check_mssql_task, check_rfc_task] >> del_tmp_table_task \
         >> get_partner_list_task >> [crawl_compliance_data_task, crawl_FAT_data_task] \
         >> copy_tmp_to_his_and_prd_task >> gen_attchments_task >> end

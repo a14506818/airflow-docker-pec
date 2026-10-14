@@ -1,9 +1,10 @@
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from datetime import datetime, timedelta
 from pendulum import timezone
 
+from src.common.common import is_on_schedule
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 
 from src.bank_data_checker.extractor import crawl_bank_data, crawl_bank_data_2, get_SAP_partner_bank_list
@@ -31,6 +32,10 @@ with DAG(
 ) as dag:
     
     start = EmptyOperator(task_id="start")
+    on_schedule_check = ShortCircuitOperator(
+        task_id="on_schedule_check",
+        python_callable=is_on_schedule
+    )
     end = EmptyOperator(
         task_id="end",
         on_success_callback=on_success
@@ -73,7 +78,7 @@ with DAG(
     )
     
 
-    start >> [check_selenium_task, check_rfc_task] >> mid \
+    start >> on_schedule_check >> [check_selenium_task, check_rfc_task] >> mid \
         >> [get_SAP_partner_bank_list_task, crawl_bank_data_task, crawl_bank_data_2_task] \
         >> compare_sap_and_crawl_bank_list_task >> gen_attchments_task >> end
 

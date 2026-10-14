@@ -1,9 +1,10 @@
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from datetime import datetime, timedelta
 from pendulum import timezone
 
+from src.common.common import is_on_schedule
 from src.bpm_member_data_compare.extractor import get_UAT_member_data, get_PRD_member_data
 from src.bpm_member_data_compare.comparator import compare_member_data, gen_attchments
 
@@ -29,6 +30,10 @@ with DAG(
 ) as dag:
     
     start = EmptyOperator(task_id="start")
+    on_schedule_check = ShortCircuitOperator(
+        task_id="on_schedule_check",
+        python_callable=is_on_schedule
+    )
     end = EmptyOperator(
         task_id="end",
         on_success_callback=on_success
@@ -55,4 +60,4 @@ with DAG(
     )
 
 
-    start >> [get_UAT_member_data_task, get_PRD_member_data_task] >> compare_member_data_task >> gen_attchments_task >> end
+    start >> on_schedule_check >> [get_UAT_member_data_task, get_PRD_member_data_task] >> compare_member_data_task >> gen_attchments_task >> end

@@ -1,12 +1,13 @@
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from datetime import datetime, timedelta
 from pendulum import timezone
 import os
 import shutil
 from airflow.models import Variable
 
+from src.common.common import is_on_schedule
 from src.common.email_utils import on_success, on_failure  
 
 # 設定
@@ -69,6 +70,10 @@ with DAG(
 ) as dag:
 
     start = EmptyOperator(task_id="start")
+    on_schedule_check = ShortCircuitOperator(
+        task_id="on_schedule_check",
+        python_callable=is_on_schedule
+    )
     end = EmptyOperator(
         task_id="end",
         on_success_callback=on_success
@@ -79,4 +84,4 @@ with DAG(
         python_callable=delete_old_logs
     )
 
-    start >> clean_logs_task >> end
+    start >> on_schedule_check >> clean_logs_task >> end

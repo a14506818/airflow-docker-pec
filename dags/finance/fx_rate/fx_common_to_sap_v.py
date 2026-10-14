@@ -1,9 +1,10 @@
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from datetime import datetime, timedelta
 from pendulum import timezone
 
+from src.common.common import is_on_schedule
 from src.common.check_connection import check_selenium, check_mssql, check_rfc
 from src.fx_to_sap.extractor import crawl_cpt_fx
 from src.fx_to_sap.transformer import gen_fx_to_other_currencies, clean_data_for_sap, clean_data_for_bpm
@@ -30,6 +31,10 @@ with DAG(
 ) as dag:
     
     start = EmptyOperator(task_id="start")
+    on_schedule_check = ShortCircuitOperator(
+        task_id="on_schedule_check",
+        python_callable=is_on_schedule
+    )
     end = EmptyOperator(
         task_id="end",
         on_success_callback=on_success
@@ -77,7 +82,7 @@ with DAG(
         python_callable=gen_attchments
     )
 
-    start >> [check_selenium_task, check_mssql_task, check_rfc_task] >> crawl_cpt_fx_task
+    start >> on_schedule_check >> [check_selenium_task, check_mssql_task, check_rfc_task] >> crawl_cpt_fx_task
 
     crawl_cpt_fx_task >> gen_fx_to_other_currencies_task >> clean_data_for_sap_task >> write_data_to_sap_task >> gen_attchments_task >> end
 
