@@ -46,15 +46,20 @@
 │   ├── finance/
 │   │   ├── bank_data_checker/bank_data_checker.py
 │   │   └── fx_rate/fx_{common,rare}_to_sap_{m,v}.py
-│   └── procurement/
-│       └── supplier_assessment/{supplier_assessment_pending_list_loader.py, supplier_compliance_crawler.py}
+│   ├── procurement/
+│   │   └── supplier_assessment/{supplier_assessment_pending_list_loader.py, supplier_compliance_crawler.py}
+│   └── RD/
+│       └── Instrument_Mgmt/instrument_master_sap_sync.py
 ├── plugins/
+│   ├── .airflowignore                      # 排除 tests/，避免 plugin manager 載入測試檔
 │   ├── nwrfcsdk/                           # SAP NetWeaver RFC SDK
+│   ├── tests/                              # 單元測試（pytest）
 │   └── src/                                # 業務邏輯（DAG 透過 `from src.xxx import ...` 引用）
 │       ├── common/                         # 共用：連線字串、連線檢查、Email 通知
 │       ├── bank_data_checker/              # 銀行代碼比對
 │       ├── bpm_member_data_compare/        # BPM 人員資料比對
 │       ├── fx_to_sap/                      # 匯率爬取 / 轉換 / 寫入 SAP 與 BPM
+│       ├── instrument_sync/                # 儀器主檔 SAP / 人事資料同步
 │       └── supplier_assessment_tasks/      # 供應商考核清單與法遵爬蟲
 ├── nginx/                                  # 不進版控
 │   ├── default.conf                        # Nginx vhost 設定
@@ -83,6 +88,7 @@
 | `bpm_member_data_compare` | 每週一 12:00 | 比對 BPM UAT 與 PRD 的人員組織資料，產出新增 / 刪除 / 更新差異表 |
 | `supplier_assessment_pending_list_loader` | 每年 7/1 12:10 | 由 SAP 取得近年度收貨（GR）資料，換算台幣、排除去年已考核廠商，產生待考核供應商清單與爬蟲清單 |
 | `supplier_compliance_crawler` | 每年 7/1 12:30 | 依爬蟲清單查詢供應商法遵資料（勞動部、環境資訊、職安署），多執行緒爬取後寫入 TMP → HIS / PRD 資料表 |
+| `instrument_master_sap_sync` | 每日 02:00 | 以 SAP RFC `Z_FI_BPM_013` 與 `BPMSysUsers` 同步儀器主檔（`REF_Instrument_Master`）的 SAP 欄位與保管人資訊，單一交易寫入（異動來源 `SAP_SYNC`），寄送每日例外報表；支援 dry-run |
 | `clean_airflow_old_logs` | 每日 08:00 | 刪除超過保留天數的 Airflow log 與空資料夾 |
 | `check_connetions` | 每日 08:00 | 檢查 Selenium、MSSQL、SAP RFC 連線是否正常 |
 
@@ -276,6 +282,19 @@ sudo ufw allow 443/tcp   # 有啟用 HTTPS 時
 * **連線設定**：DB / SAP 連線一律透過 `src.common.common` 的 `get_mssql_conn_str()`、`get_sap_conn_params()` 等函式取得，不要在程式碼中寫死帳密。
 * **檔案路徑**：爬蟲下載使用 `/opt/airflow/downloads`，產出檔使用 `/opt/airflow/export`。
 * **Log 清理**：log 由 `clean_airflow_old_logs` 每日自動清理，保留天數可透過 Variable 調整。
+
+### `instrument_master_sap_sync`（儀器主檔 SAP 同步）
+
+* **規則**：集中在 `plugins/src/instrument_sync/rules.py`（純 Python），欄位對應與 RFC 參數在 `config.py`。修改規則需同步更新測試、經 code review，上線前先跑 dry-run。
+* **Dry-run**：UI「Trigger DAG w/ config」勾選 `dry_run`（或 conf `{"dry_run": true}`），只比對並寄出差異清單，不寫入主檔；附件檔名結尾為 `__DRYRUN`。
+* **收件人**：只寄 `email_receiver_list`（IT）。
+* **告警**：任一 task 失敗（重試 2 次、間隔 10 分鐘）寄失敗通知；04:00 尚未完成寄 SLA 告警。SAP 資料檢核不通過（0 筆、資產編號空值或重複）直接失敗不重試，主檔不變。
+
+### 單元測試
+
+```bash
+docker compose exec airflow-scheduler bash -c "cd /opt/airflow/plugins && python -m pytest tests -q"
+```
 
 ---
 

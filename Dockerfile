@@ -45,4 +45,5 @@ RUN pip install --upgrade pip && \
         pyrfc==3.3.1 \
         pandas \
         openpyxl \
-        requests
+        requests \
+        pytest

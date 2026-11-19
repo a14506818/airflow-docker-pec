@@ -6,7 +6,8 @@ import os
 
 
 
-def send_success_email(dag_id: str, description: str, execution_date, to: list, attachments: list = None):
+def send_success_email(dag_id: str, description: str, execution_date, to: list, attachments: list = None,
+                       summary_html: str = None):
     logging.info("📤 Preparing to send success notification email...")
     tz = pendulum.timezone("Asia/Taipei")
      # ✅ 確保是 pendulum datetime
@@ -22,6 +23,7 @@ def send_success_email(dag_id: str, description: str, execution_date, to: list, 
         <li><b>Description:</b> {description}</li>
         <li><b>Execution Date & Time:</b> {local_time.strftime('%Y-%m-%d %H:%M:%S')} (CST)</li>
     </ul>
+    {summary_html or ""}
     <p>This is an automated system notification. Please do not reply.</p>
     """
     # 過濾出存在的檔案
@@ -39,11 +41,17 @@ def on_success(context): # 前一個task 必須是 gen_attchments，才會寄附
     # 取得前一個 task instance（這裡假設 end 只有一個 upstream）
     try:
         ti = context["ti"] 
-        xcom_value = ti.xcom_pull(task_ids="gen_attchments") 
+        xcom_value = ti.xcom_pull(task_ids="gen_attchments")
         logging.info(f"✅ 成功從上一個任務取得 XCom：{xcom_value}")
     except Exception as e:
         logging.error(f"❌ 無法取得上一個任務的 XCom 值: {e}")
         xcom_value = None  # 如果無法取得，則設為 None
+    # 選填：gen_attchments 可另外 push key="summary_html"，放進信件內文
+    try:
+        summary_html = context["ti"].xcom_pull(task_ids="gen_attchments", key="summary_html")
+    except Exception as e:
+        logging.warning(f"⚠️ 無法取得 summary_html: {e}")
+        summary_html = None
     # 取得 params 中的 additional_email_receiver_list ---------------------------------------------------------------
     try:
         p = context["params"]
@@ -63,7 +71,8 @@ def on_success(context): # 前一個task 必須是 gen_attchments，才會寄附
         description=context['dag'].description,
         execution_date=context['dag_run'].start_date, # context['execution_date'],
         to=email_receiver_list,
-        attachments=xcom_value  # 可加參數傳路徑
+        attachments=xcom_value,  # 可加參數傳路徑
+        summary_html=summary_html,
     )
 
 def send_failure_email(dag_id: str, description: str, execution_date, to: list):
@@ -106,3 +115,19 @@ def on_failure(context):
         execution_date=context['dag_run'].start_date, # context['execution_date'],
         to=email_receiver_list
     )
+
+def on_sla_miss(dag, task_list, blocking_task_list, slas, blocking_tis):
+    """DAG sla_miss_callback：排程在 SLA 時間內未完成時通知 IT（email_receiver_list）"""
+    email_receiver_list = Variable.get("email_receiver_list", deserialize_json=True)
+    subject = f"[Airflow] DAG SLA Missed - {dag.dag_id}"
+    html_content = f"""
+    <h3>⏰ DAG 未在預定時間內完成</h3>
+    <ul>
+        <li><b>DAG ID:</b> {dag.dag_id}</li>
+        <li><b>Description:</b> {dag.description}</li>
+        <li><b>SLA Missed Tasks:</b><pre>{task_list}</pre></li>
+        <li><b>Blocking Tasks:</b><pre>{blocking_task_list}</pre></li>
+    </ul>
+    <p>This is an automated system notification. Please do not reply.</p>
+    """
+    send_email(to=email_receiver_list, subject=subject, html_content=html_content)
