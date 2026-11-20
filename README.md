@@ -49,7 +49,7 @@
 │   ├── procurement/
 │   │   └── supplier_assessment/{supplier_assessment_pending_list_loader.py, supplier_compliance_crawler.py}
 │   └── RD/
-│       └── Instrument_Mgmt/instrument_master_sap_sync.py
+│       └── Instrument_Mgmt/{instrument_master_sap_sync.py, instrument_calibration_notify.py, instrument_contract_notify.py}
 ├── plugins/
 │   ├── .airflowignore                      # 排除 tests/，避免 plugin manager 載入測試檔
 │   ├── nwrfcsdk/                           # SAP NetWeaver RFC SDK
@@ -60,6 +60,7 @@
 │       ├── bpm_member_data_compare/        # BPM 人員資料比對
 │       ├── fx_to_sap/                      # 匯率爬取 / 轉換 / 寫入 SAP 與 BPM
 │       ├── instrument_sync/                # 儀器主檔 SAP / 人事資料同步
+│       ├── instrument_notify/              # 儀器校驗 / 維護合約到期通知
 │       └── supplier_assessment_tasks/      # 供應商考核清單與法遵爬蟲
 ├── nginx/                                  # 不進版控
 │   ├── default.conf                        # Nginx vhost 設定
@@ -89,6 +90,8 @@
 | `supplier_assessment_pending_list_loader` | 每年 7/1 12:10 | 由 SAP 取得近年度收貨（GR）資料，換算台幣、排除去年已考核廠商，產生待考核供應商清單與爬蟲清單 |
 | `supplier_compliance_crawler` | 每年 7/1 12:30 | 依爬蟲清單查詢供應商法遵資料（勞動部、環境資訊、職安署），多執行緒爬取後寫入 TMP → HIS / PRD 資料表 |
 | `instrument_master_sap_sync` | 每日 02:00 | 以 SAP RFC `Z_FI_BPM_013` 與 `BPMSysUsers` 同步儀器主檔（`REF_Instrument_Master`）的 SAP 欄位與保管人資訊，單一交易寫入（異動來源 `SAP_SYNC`），寄送每日例外報表；支援 dry-run |
+| `instrument_calibration_notify` | 每月 1、15 日 08:00 | 儀器校驗到期通知：`is_Notify_Calibration = Y` 且剩餘天數 <= 提前通知天數，每位收件人一封（保管人 → 組保管人遞補，額外通知人副知），IT 收摘要與 Excel；支援 dry-run |
+| `instrument_contract_notify` | 每月 1 日 08:00 | 儀器維護合約到期通知：`is_Maint_Contract = Y` 且剩餘天數 <= 合約提前通知天數，寄送方式同上；支援 dry-run |
 | `clean_airflow_old_logs` | 每日 08:00 | 刪除超過保留天數的 Airflow log 與空資料夾 |
 | `check_connetions` | 每日 08:00 | 檢查 Selenium、MSSQL、SAP RFC 連線是否正常 |
 
@@ -289,6 +292,18 @@ sudo ufw allow 443/tcp   # 有啟用 HTTPS 時
 * **Dry-run**：UI「Trigger DAG w/ config」勾選 `dry_run`（或 conf `{"dry_run": true}`），只比對並寄出差異清單，不寫入主檔；附件檔名結尾為 `__DRYRUN`。
 * **收件人**：只寄 `email_receiver_list`（IT）。
 * **告警**：任一 task 失敗（重試 2 次、間隔 10 分鐘）寄失敗通知；04:00 尚未完成寄 SLA 告警。SAP 資料檢核不通過（0 筆、資產編號空值或重複）直接失敗不重試，主檔不變。
+
+### `instrument_calibration_notify` / `instrument_contract_notify`（儀器到期通知）
+
+* **規則**：`plugins/src/instrument_notify/rules.py`（純 Python）；兩種通知的差異（條件欄位、信件文字）集中在 `config.py` 的 `CALIBRATION` / `CONTRACT`。
+* **條件**：`is_Active = Y`，且通知開關（`is_Notify_Calibration` / `is_Maint_Contract`）= Y，且剩餘天數（`Next_Due_Date` / `Contract_Expiry_Date` − 今天）<= 提前通知天數（含已逾期）。算不出到期日的列入 IT 摘要「資料異常」。
+* **收件人**：
+  * 保管人 `Keeper` 有效就寄保管人，否則寄組保管人 `Sub_Keeper`；兩者都無效 → 列入 IT 摘要「無法送達」。
+  * 額外通知人 `Additional_Notify_Keeper` 一律收。
+  * 以帳號合併，每個帳號一封。帳號有效 = `BPMSysUsers` 存在且未停用；Email 取 `BPMDB.dbo.v_BPMSysOUMembers.Email`；沒有 email 的帳號不寄、不遞補，列在 IT 摘要「無 Email」區塊與 Excel 分頁。
+* **標記**：【新】＝上次寄送日（校驗：上一個 1 / 15 日；合約：上月 1 日）時還不在清單內；【處理中】＝`REF_Instrument_Cal_Record` 有 `PROCESSING` 紀錄；【GMP】＝`is_GMP = Y`。
+* **Dry-run**：conf `{"dry_run": true}`，不寄使用者信，只寄 IT 摘要與 Excel（檔名結尾 `__DRYRUN`）。
+* **重跑**：`send_notifications` 不自動重試，避免重複寄信；部分寄送失敗時 task 失敗並通知 IT，task log 會列出失敗帳號（其餘已寄出），請勿整批重跑。
 
 ### 單元測試
 
